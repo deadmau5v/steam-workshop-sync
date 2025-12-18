@@ -23,6 +23,24 @@ def date_formater(date_str: str | None) -> datetime | None:
 
     # 英文格式: '12 Dec @ 7:12am' 或 '2017 年 12 Dec @ 7:12am'
     # 补全年份
+
+    # 处理异常格式: '2025 年 Nov 22, 2019 @ 5:02pm' (年份前缀错误,实际日期中包含正确年份)
+    match_en_malformed = re.match(
+        r"^(?:\d{4}) 年 ([A-Za-z]{3}) (\d{1,2}), (\d{4}) @ (\d{1,2}:\d{2}[ap]m)",
+        date_str,
+    )
+    if match_en_malformed:
+        # 使用实际日期中的年份,忽略前缀年份
+        month = match_en_malformed.group(1)
+        day = match_en_malformed.group(2)
+        year = match_en_malformed.group(3)
+        time_str = match_en_malformed.group(4)
+        dt_str = f"{year} {month} {day} {time_str}"
+        try:
+            return datetime.strptime(dt_str, "%Y %b %d %I:%M%p")
+        except Exception:
+            pass
+
     match_en = re.match(
         r"^(?:(\d{4}) 年 )?(\d{1,2}|[A-Za-z]{3,}) ([A-Za-z]{3}|[0-9]{1,2}) @ (\d{1,2}:\d{2}[ap]m)",
         date_str,
@@ -32,7 +50,7 @@ def date_formater(date_str: str | None) -> datetime | None:
         date_str,
     )
     match_en_full = re.match(
-        r"^(\d{4}) 年 (\d{1,2}) ([A-Za-z]{3}) @ (\d{1,2}:\d{2}[ap]m)",
+        r"^(\d{4}) 年 (\d{1,2}) ([A-Za-z]{3}) @ (\d{1,2}[ap]m)",
         date_str,
     )
     match_en_month_first = re.match(
