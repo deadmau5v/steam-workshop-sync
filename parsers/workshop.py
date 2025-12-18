@@ -1,36 +1,15 @@
-from typing import Optional
-from datetime import datetime
 
-from pydantic import BaseModel
 from bs4 import BeautifulSoup
 import html2text
+import re
 
+from models.workshop import WorkshopItem, Pagination
 from utils.formater import date_formater
 from utils.log import get_logger
 
 logger = get_logger(__name__)
 
 
-class Pagination(BaseModel):
-    items_count: int = 0
-    current_page: int = 1
-    total_pages: int = 1
-
-
-class WorkshopItem(BaseModel):
-    id: str
-    url: str
-    title: str
-    img_url: str
-    author: str
-    author_profile: str
-    rating_img: str = None
-
-
-class WorkshopItemInfo(WorkshopItem):
-    description: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
 
 class WorkshopParser:
@@ -64,6 +43,11 @@ class WorkshopParser:
 
             rating_img_tag = item_tag.find(attrs={"class": "fileRating"})
             rating_img = rating_img_tag["src"] if rating_img_tag else None
+            match = re.search(r'(?:(\d+)-star|not-yet)\.png', rating_img)
+            rating = None
+
+            if match and match.group(1):
+                rating = int(match.group(1))
 
             item = WorkshopItem(
                 id=item_id,
@@ -72,7 +56,7 @@ class WorkshopParser:
                 img_url=img_url,
                 author=author_name,
                 author_profile=author_profile,
-                rating_img=rating_img,
+                rating=rating,
             )
             items.append(item)
 

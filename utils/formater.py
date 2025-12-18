@@ -19,4 +19,17 @@ def date_formater(date_str: str):
     else:
         date_str = date_str.replace("上午", "").replace("  ", " ")
     
-    return datetime.strptime(date_str, "%Y 年 %m 月 %d 日 %H:%M")
+    # Handle multiple date formats for robustness
+    formats = [
+        "%Y 年 %m 月 %d 日 %H:%M",
+        "%Y 年 %m 月 %d 日 %H:%M",
+        "%Y 年 %m %b @ %I:%M%p",   # e.g., 2025 年 1 Nov @ 8:30am
+        "%Y 年 %d %b @ %I:%M%p",   # e.g., 2025 年 1 Nov @ 8:30am
+        "%Y 年 %b %d @ %I:%M%p",    # e.g., 2025 年 Nov 1 @ 8:30am
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"time data '{date_str}' does not match supported formats: {formats}")
