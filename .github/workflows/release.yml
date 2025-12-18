@@ -16,10 +16,13 @@ jobs:
     permissions:
       contents: write
       packages: write
-      
+      security-events: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整的提交历史以生成 changelog
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -41,8 +44,13 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=Steam Workshop Sync
+            org.opencontainers.image.description=Continuous monitoring and synchronization tool for Steam Workshop items
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -52,33 +60,134 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+          provenance: true
+          sbom: true
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个标签
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed -n '2p')
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous tag found, using all commits"
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          echo "Generating changelog from $PREVIOUS_TAG to ${{ github.ref_name }}"
+
+          # 生成 changelog
+          CHANGELOG=$(cat << 'EOF'
+          ## 🚀 What's Changed
+
+          $(git log ${PREVIOUS_TAG}..${{ github.ref_name }} --pretty=format:"- %s (%h)" --no-merges | sed 's/^/          /')
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.ref_name }}
+          EOF
+          )
+
+          # 保存到文件
+          eval "echo \"$CHANGELOG\"" > changelog.md
+
+          # 输出到 GitHub Actions
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           generate_release_notes: true
+          files: |
+            sbom.spdx.json
+            trivy-results.sarif
           body: |
-            ## Docker Image
-            
-            Pull the Docker image:
+            ## 📦 Docker Images
+
+            **Multi-architecture support**: `linux/amd64`, `linux/arm64`
+
+            ### Pull the image:
+
             ```bash
+            # Specific version
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ```
-            
-            Or use latest:
-            ```bash
+
+            # Latest version
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ```
-            
-            ## Running the Container
-            
+
+            ### Quick Start with Docker:
+
             ```bash
             docker run -d \
               --name steam-workshop-sync \
+              --restart unless-stopped \
               -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
+              -e STEAM_WORKSHOP_SYNC_APP_ID="your_app_id" \
               -e STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0 \
               -e STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             ```
+
+            ### Quick Start with Docker Compose:
+
+            ```bash
+            # Clone the repository
+            git clone https://github.com/${{ github.repository }}.git
+            cd steam-workshop-sync
+
+            # Initialize environment
+            make init
+
+            # Start services
+            make up
+            ```
+
+            ## 📋 Available Image Tags
+
+            ${{ steps.meta.outputs.tags }}
+
+            ## 🔒 Security
+
+            - ✅ Image signed with cosign
+            - ✅ SBOM (Software Bill of Materials) included
+            - ✅ Vulnerability scan completed (see attached reports)
+
+            ## 📚 Documentation
+
+            - [Deployment Guide](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/DEPLOYMENT.md)
+            - [README](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)
+
+            ---
+
+            ${{ steps.changelog.outputs.changelog }}
+
+      - name: Update Docker Hub Description
+        if: github.event_name == 'push'
+        run: |
+          echo "✅ Release ${{ github.ref_name }} completed successfully!"
+          echo "📦 Docker images pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
 

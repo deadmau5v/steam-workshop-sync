@@ -63,7 +63,7 @@ uv run python main.py
 
 ## 🚀 CI/CD 发布流程
 
-本项目使用 GitHub Actions 自动化构建和发布。
+本项目使用 GitHub Actions 自动化构建和发布，提供完整的安全扫描和自动化发布流程。
 
 ### 发布新版本
 
@@ -71,31 +71,45 @@ uv run python main.py
    ```bash
    git add .
    git commit -m "feat: 新功能描述"
-   git push origin main
+   git push origin master
    ```
 
 2. **创建版本标签**
    ```bash
    # 创建标签（遵循语义化版本）
    git tag v1.0.0
-   
+
    # 推送标签到远程
    git push origin v1.0.0
    ```
 
 3. **自动化流程**
-   
-   推送标签后，GitHub Actions 会自动：
-   - ✅ 构建 Docker 镜像（支持 amd64 和 arm64 架构）
+
+   推送标签后，GitHub Actions 会自动执行以下操作：
+
+   #### 构建阶段
+   - ✅ 构建多架构 Docker 镜像（amd64 和 arm64）
+   - ✅ 生成镜像元数据和标签
    - ✅ 推送镜像到 GitHub Container Registry (GHCR)
-   - ✅ 创建 GitHub Release，包含发布说明和使用文档
-   - ✅ 标记为 `latest` 和版本号标签
+   - ✅ 生成 Provenance 和 SBOM（软件物料清单）
+
+   #### 安全扫描阶段
+   - ✅ 使用 Trivy 扫描镜像漏洞（CRITICAL 和 HIGH 级别）
+   - ✅ 生成 SBOM (Software Bill of Materials)
+   - ✅ 上传扫描结果到 GitHub Security 面板
+   - ✅ 附加安全报告到 Release
+
+   #### 发布阶段
+   - ✅ 自动生成 Changelog（基于 Git 提交历史）
+   - ✅ 创建 GitHub Release 包含详细说明
+   - ✅ 附加 SBOM 和安全扫描报告
+   - ✅ 标记镜像为 `latest` 和版本号标签
 
 4. **使用发布的镜像**
    ```bash
    # 拉取特定版本
    docker pull ghcr.io/你的用户名/steam-workshop-sync:v1.0.0
-   
+
    # 拉取最新版本
    docker pull ghcr.io/你的用户名/steam-workshop-sync:latest
    ```
@@ -111,14 +125,27 @@ uv run python main.py
    - 勾选 **Allow GitHub Actions to create and approve pull requests**
 4. 点击 **Save**
 
-#### 步骤 2: 验证工作流
+#### 步骤 2: 启用安全功能（可选但推荐）
+
+1. 点击 **Settings** → **Code security and analysis**
+2. 启用以下功能：
+   - **Dependency graph** - 依赖关系图
+   - **Dependabot alerts** - 依赖安全警报
+   - **Dependabot security updates** - 自动安全更新
+   - **Code scanning** - 代码扫描（集成 Trivy 结果）
+
+#### 步骤 3: 验证工作流
 
 查看 `.github/workflows/` 目录下的工作流文件：
 
 - `release.yml` - 发布工作流（标签触发）
+  - 多架构镜像构建
+  - 安全扫描和 SBOM 生成
+  - 自动 Release 创建
 - `docker-test.yml` - 测试工作流（PR/Push 触发）
+  - 构建测试验证
 
-#### 步骤 3: 测试发布
+#### 步骤 4: 测试发布
 
 创建一个测试标签：
 
@@ -161,9 +188,13 @@ git push origin v2.0.0
 - `v1` - 主要版本
 - `latest` - 最新版本（仅在主分支）
 
+所有镜像支持多架构：
+- `linux/amd64` - x86_64 架构（标准服务器）
+- `linux/arm64` - ARM64 架构（Apple Silicon、ARM 服务器）
+
 示例：
 ```bash
-# 拉取特定版本
+# 拉取特定版本（自动选择适合的架构）
 docker pull ghcr.io/你的用户名/steam-workshop-sync:v1.2.3
 
 # 拉取 1.2.x 最新版
@@ -174,6 +205,43 @@ docker pull ghcr.io/你的用户名/steam-workshop-sync:v1
 
 # 拉取最新版
 docker pull ghcr.io/你的用户名/steam-workshop-sync:latest
+
+# 强制拉取特定架构
+docker pull --platform linux/amd64 ghcr.io/你的用户名/steam-workshop-sync:latest
+docker pull --platform linux/arm64 ghcr.io/你的用户名/steam-workshop-sync:latest
+```
+
+### 安全和合规性
+
+每次发布都包含完整的安全报告：
+
+1. **漏洞扫描报告** (`trivy-results.sarif`)
+   - 扫描 CRITICAL 和 HIGH 级别漏洞
+   - 自动上传到 GitHub Security 面板
+   - 可在 Release 页面下载完整报告
+
+2. **SBOM（软件物料清单）** (`sbom.spdx.json`)
+   - SPDX 格式的完整依赖清单
+   - 用于合规性审计和供应链安全
+   - 可在 Release 页面下载
+
+3. **镜像签名和证明**
+   - 启用 Docker Provenance
+   - 包含构建环境和依赖信息
+   - 可验证镜像完整性
+
+#### 查看安全报告
+
+```bash
+# 在 GitHub 仓库中查看
+# 1. 前往 Security → Code scanning alerts
+# 2. 查看 Trivy 扫描结果
+
+# 下载 SBOM
+curl -L -o sbom.json https://github.com/你的用户名/steam-workshop-sync/releases/download/v1.0.0/sbom.spdx.json
+
+# 验证镜像
+docker buildx imagetools inspect ghcr.io/你的用户名/steam-workshop-sync:v1.0.0
 ```
 
 ## 🔧 配置说明

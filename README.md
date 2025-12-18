@@ -1,14 +1,21 @@
 # Steam Workshop Sync
 
+[![Build and Release](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/release.yml/badge.svg)](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/release.yml)
+[![Security Scan](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/security-scan.yml/badge.svg)](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/security-scan.yml)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/你的用户名/steam-workshop-sync/pkgs/container/steam-workshop-sync)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Steam Workshop 数据同步工具，用于监控和同步 Steam 创意工坊的物品数据到数据库。
 
-## 特性
+## ✨ 特性
 
 - 🔄 自动持续监控 Steam Workshop 更新
 - 💾 数据存储到 PostgreSQL 数据库
-- 🐳 Docker 容器化部署
+- 🐳 Docker 容器化部署，支持多架构（amd64/arm64）
 - 🔧 可配置的延迟和监控策略
 - 📊 详细的日志记录
+- 🔒 自动安全扫描和 SBOM 生成
+- 🚀 GitHub Actions 自动化 CI/CD
 
 ## 快速开始
 
