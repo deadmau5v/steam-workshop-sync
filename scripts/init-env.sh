@@ -37,6 +37,9 @@ POSTGRES_DB=${POSTGRES_DB:-steam_workshop}
 read -p "PostgreSQL 端口 (默认: 5432): " POSTGRES_PORT
 POSTGRES_PORT=${POSTGRES_PORT:-5432}
 
+read -p "Steam Workshop APP ID (默认: 647960): " STEAM_WORKSHOP_SYNC_APP_ID
+STEAM_WORKSHOP_SYNC_APP_ID=${STEAM_WORKSHOP_SYNC_APP_ID:-647960}
+
 read -p "页面间延迟（秒，默认: 5.0）: " PAGE_DELAY
 PAGE_DELAY=${PAGE_DELAY:-5.0}
 
@@ -55,6 +58,9 @@ POSTGRES_PORT=$POSTGRES_PORT
 # 数据库连接字符串（使用 Docker Compose 服务名）
 STEAM_WORKSHOP_SYNC_DATABASE_URL=postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres:5432/$POSTGRES_DB
 
+# Steam 游戏 APP ID（用于访问对应的 Workshop）
+STEAM_WORKSHOP_SYNC_APP_ID=$STEAM_WORKSHOP_SYNC_APP_ID
+
 # 页面间延迟（秒）
 STEAM_WORKSHOP_SYNC_PAGE_DELAY=$PAGE_DELAY
 
@@ -69,6 +75,7 @@ echo "📋 配置信息："
 echo "  - 数据库用户: $POSTGRES_USER"
 echo "  - 数据库名: $POSTGRES_DB"
 echo "  - 数据库端口: $POSTGRES_PORT"
+echo "  - APP ID: $STEAM_WORKSHOP_SYNC_APP_ID"
 echo "  - 页面延迟: ${PAGE_DELAY}秒"
 echo "  - 循环延迟: ${CYCLE_DELAY}秒"
 echo ""

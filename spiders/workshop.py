@@ -16,7 +16,7 @@ class Wrokshop:
     def __init__(self) -> None:
         self.appid = os.environ.get("STEAM_WORKSHOP_SYNC_APP_ID")
         if not self.appid:
-            raise EnvironmentError("没有设置APPID")
+            raise EnvironmentError("没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）")
 
         self.timeout = int(os.environ.get("STEAM_WORKSHOP_SYNC_TIMEOUT", 30))
         # 请求之间的基础延迟（秒）

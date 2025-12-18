@@ -38,6 +38,7 @@ docker run -d \
   --name steam-workshop-sync \
   --restart unless-stopped \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
+  -e STEAM_WORKSHOP_SYNC_APP_ID="647960" \
   -e STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0 \
   -e STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0 \
   ghcr.io/deadmau5v/steam-workshop-sync:latest
@@ -63,7 +64,8 @@ uv run python main.py
 
 ## 🚀 CI/CD 发布流程
 
-本项目使用 GitHub Actions 自动化构建和发布，提供完整的安全扫描和自动化发布流程。
+本项目使用 GitHub Actions 自动化构建和发布 Docker 镜像到 GHCR。
+注意：运行发布镜像时需要设置 `STEAM_WORKSHOP_SYNC_DATABASE_URL` 和 `STEAM_WORKSHOP_SYNC_APP_ID`（必需）。
 
 ### 发布新版本
 
@@ -91,18 +93,11 @@ uv run python main.py
    - ✅ 构建多架构 Docker 镜像（amd64 和 arm64）
    - ✅ 生成镜像元数据和标签
    - ✅ 推送镜像到 GitHub Container Registry (GHCR)
-   - ✅ 生成 Provenance 和 SBOM（软件物料清单）
-
-   #### 安全扫描阶段
-   - ✅ 使用 Trivy 扫描镜像漏洞（CRITICAL 和 HIGH 级别）
-   - ✅ 生成 SBOM (Software Bill of Materials)
-   - ✅ 上传扫描结果到 GitHub Security 面板
-   - ✅ 附加安全报告到 Release
+   - ✅ 生成 `latest` 与版本号标签
 
    #### 发布阶段
    - ✅ 自动生成 Changelog（基于 Git 提交历史）
    - ✅ 创建 GitHub Release 包含详细说明
-   - ✅ 附加 SBOM 和安全扫描报告
    - ✅ 标记镜像为 `latest` 和版本号标签
 
 4. **使用发布的镜像**

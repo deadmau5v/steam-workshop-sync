@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 
 
 def date_formater(date_str: str | None) -> datetime | None:
@@ -148,14 +149,23 @@ def file_size_formater(file_size: str | None) -> int:
     if not file_size:
         return 0
 
-    if "KB" in file_size:
-        return int(float(file_size.split(" ")[0]) * 1024)
-    elif "MB" in file_size:
-        return int(float(file_size.split(" ")[0]) * 1024 * 1024)
-    elif "GB" in file_size:
-        return int(float(file_size.split(" ")[0]) * 1024 * 1024 * 1024)
+    s = file_size.strip()
 
-    return file_size
+    # Common Steam formats like "77.308 KB", "1.633 MB", "2.1 GB"
+    if "KB" in s:
+        return int(float(s.split(" ")[0]) * 1024)
+    if "MB" in s:
+        return int(float(s.split(" ")[0]) * 1024 * 1024)
+    if "GB" in s:
+        return int(float(s.split(" ")[0]) * 1024 * 1024 * 1024)
+
+    # Plain integer strings like "123456"
+    if s.isdigit():
+        return int(s)
+
+    # Fallback: extract digits from formats like "123 bytes", "Size: 1234"
+    digits = re.sub(r"[^0-9]", "", s)
+    return int(digits) if digits else 0
 
 def image_url_formater(image_url: str | None) -> str | None:
     """

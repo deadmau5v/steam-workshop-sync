@@ -18,6 +18,7 @@ POSTGRES_PASSWORD=your_secure_password_here
 POSTGRES_DB=steam_workshop
 POSTGRES_PORT=5432
 STEAM_WORKSHOP_SYNC_DATABASE_URL=postgresql://steam_user:your_secure_password_here@postgres:5432/steam_workshop
+STEAM_WORKSHOP_SYNC_APP_ID=647960
 STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0
 STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0
 EOF
@@ -40,6 +41,7 @@ docker run -d \
   --name steam-workshop-sync \
   --restart unless-stopped \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:pass@host:5432/db" \
+  -e STEAM_WORKSHOP_SYNC_APP_ID="647960" \
   ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 

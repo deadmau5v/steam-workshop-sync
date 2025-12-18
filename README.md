@@ -38,6 +38,7 @@ POSTGRES_DB=steam_workshop
 POSTGRES_PORT=5432
 
 STEAM_WORKSHOP_SYNC_DATABASE_URL=postgresql://steam_user:your_secure_password@postgres:5432/steam_workshop
+STEAM_WORKSHOP_SYNC_APP_ID=647960
 STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0
 STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0
 EOF
@@ -66,6 +67,7 @@ docker-compose down
 docker run -d \
   --name steam-workshop-sync \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
+  -e STEAM_WORKSHOP_SYNC_APP_ID="647960" \
   -e STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0 \
   -e STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0 \
   ghcr.io/deadmau5v/steam-workshop-sync:latest
@@ -103,6 +105,7 @@ uv run python main.py
 | 变量名 | 说明 | 默认值 | 必需 |
 |--------|------|--------|------|
 | `STEAM_WORKSHOP_SYNC_DATABASE_URL` | PostgreSQL 数据库连接字符串 | - | ✅ |
+| `STEAM_WORKSHOP_SYNC_APP_ID` | Steam 游戏 App ID（用于访问对应的 Workshop） | - | ✅ |
 | `STEAM_WORKSHOP_SYNC_PAGE_DELAY` | 页面间延迟（秒） | 5.0 | ❌ |
 | `STEAM_WORKSHOP_SYNC_CYCLE_DELAY` | 循环间延迟（秒） | 60.0 | ❌ |
 
@@ -167,12 +170,14 @@ docker build -t steam-workshop-sync:latest .
 docker run -d \
   --name steam-workshop-sync \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
+  -e STEAM_WORKSHOP_SYNC_APP_ID="647960" \
   steam-workshop-sync:latest
 ```
 
 ## CI/CD 发布流程
 
 本项目使用 GitHub Actions 自动构建和发布 Docker 镜像到 GitHub Container Registry (GHCR)。
+发布镜像运行时请确保设置必需变量：`STEAM_WORKSHOP_SYNC_DATABASE_URL` 和 `STEAM_WORKSHOP_SYNC_APP_ID`。
 
 ### 发布新版本
 
@@ -192,6 +197,18 @@ git push origin v1.0.0
 docker pull ghcr.io/deadmau5v/steam-workshop-sync:v1.0.0
 # 或使用 latest
 docker pull ghcr.io/deadmau5v/steam-workshop-sync:latest
+```
+
+4. 运行镜像示例：
+```bash
+docker run -d \
+  --name steam-workshop-sync \
+  --restart unless-stopped \
+  -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
+  -e STEAM_WORKSHOP_SYNC_APP_ID="647960" \
+  -e STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0 \
+  -e STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0 \
+  ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 
 ### 配置 GHCR
