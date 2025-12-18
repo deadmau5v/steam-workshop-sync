@@ -49,7 +49,7 @@ class Wrokshop:
         response.raise_for_status()
         return response
 
-    def get_new_items(self):
+    def get_new_items(self, page: int = 1):
         start_time = datetime.now()
 
         params = {
@@ -57,12 +57,12 @@ class Wrokshop:
             "browsesort": "mostrecent",
             "section": "readytouseitems",
             "actualsort": "mostrecent",
-            "p": "2",
+            "p": str(page),
         }
 
         url = "https://steamcommunity.com/workshop/browse/"
 
-        logger.info(f"正在请求: {url}")
+        logger.info(f"正在请求第 {page} 页: {url}")
         response = self._do_request(
             url, params=params, headers=self.headers, timeout=self.timeout
         )
@@ -70,7 +70,7 @@ class Wrokshop:
 
         end_time = datetime.now()
         used_time_ms = int((end_time - start_time).total_seconds() * 1000)
-        logger.info(f"爬取最新项目耗时: {used_time_ms}ms")
+        logger.info(f"爬取第 {page} 页耗时: {used_time_ms}ms")
 
         return WorkshopParser.parser_items_card(response.text)
 
