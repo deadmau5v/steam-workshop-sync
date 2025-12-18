@@ -24,6 +24,7 @@ def upgrade() -> None:
     op.alter_column('workshop_items', 'file_size',
                existing_type=sa.VARCHAR(),
                type_=sa.Integer(),
+               postgresql_using='file_size::integer',
                nullable=False)
     # ### end Alembic commands ###
 
@@ -34,5 +35,6 @@ def downgrade() -> None:
     op.alter_column('workshop_items', 'file_size',
                existing_type=sa.Integer(),
                type_=sa.VARCHAR(),
+               postgresql_using='file_size::text',
                nullable=True)
     # ### end Alembic commands ###
