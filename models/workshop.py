@@ -2,7 +2,8 @@ from typing import Optional
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Column
+from sqlalchemy import ARRAY, String
 
 
 class Pagination(BaseModel):
@@ -25,6 +26,7 @@ class WorkshopItem(SQLModel, table=True):
     rating: Optional[int] = None
     description: Optional[str] = None
     file_size: int = Field(default=0)
+    images: list[str] = Field(sa_column=Column(ARRAY(String)))
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

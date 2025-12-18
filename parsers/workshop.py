@@ -3,7 +3,7 @@ import html2text
 import re
 
 from models.workshop import WorkshopItem, Pagination
-from utils.formater import date_formater, file_size_formater
+from utils.formater import date_formater, file_size_formater, image_url_formater
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -107,4 +107,8 @@ class WorkshopParser:
         updated_at = date_formater(details_stats.get("Updated", None))
         file_size = file_size_formater(details_stats.get("File Size", None))
 
-        return description, created_at, updated_at, file_size
+        images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
+        images = list(set([image_url_formater(img["src"]) for img in images_tag]))
+
+
+        return description, created_at, updated_at, file_size, images

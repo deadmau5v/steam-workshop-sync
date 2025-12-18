@@ -83,7 +83,7 @@ class Wrokshop:
         response = self._do_request(url, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
-        description, created_at, updated_at, file_size = WorkshopParser.parser_items_info(
+        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(
             response.text
         )
         item_data = item.model_dump()
@@ -93,6 +93,7 @@ class Wrokshop:
                 "created_at": created_at,
                 "updated_at": updated_at,
                 "file_size": file_size,
+                "images": images,
             }
         )
         return WorkshopItem.model_validate(item_data)

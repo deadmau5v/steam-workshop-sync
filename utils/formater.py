@@ -58,3 +58,15 @@ def file_size_formater(file_size: str | None) -> int:
         return int(float(file_size.split(" ")[0]) * 1024 * 1024 * 1024)
 
     return file_size
+
+def image_url_formater(image_url: str | None) -> str | None:
+    """
+    图片URL格式化
+    """
+    if not image_url:
+        return None
+    
+    if "?" in image_url:
+        return image_url.split("?")[0]
+
+    return image_url
