@@ -53,7 +53,7 @@ def save_workshop_item(
             # 更新现有记录
             existing.url = item.url
             existing.title = item.title
-            existing.img_url = item.img_url
+            existing.coverview_url = item.coverview_url
             existing.author = item.author
             existing.author_profile = item.author_profile
             existing.rating = item.rating

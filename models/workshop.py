@@ -19,11 +19,13 @@ class WorkshopItem(SQLModel, table=True):
     id: str = Field(primary_key=True, index=True)
     url: str
     title: str = Field(index=True)
-    img_url: str
+    coverview_url: str
     author: str = Field(index=True)
     author_profile: str
     rating: Optional[int] = None
     description: Optional[str] = None
+    file_size: Optional[str] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     synced_at: datetime = Field(default_factory=datetime.utcnow)

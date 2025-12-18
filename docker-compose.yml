@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  steam-workshop-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: steam-workshop-sync
+    restart: unless-stopped
+    environment:
+      # 数据库配置
+      STEAM_WORKSHOP_SYNC_DATABASE_URL: ${STEAM_WORKSHOP_SYNC_DATABASE_URL}
+      # 爬虫配置
+      STEAM_WORKSHOP_SYNC_PAGE_DELAY: ${STEAM_WORKSHOP_SYNC_PAGE_DELAY:-5.0}
+      STEAM_WORKSHOP_SYNC_CYCLE_DELAY: ${STEAM_WORKSHOP_SYNC_CYCLE_DELAY:-60.0}
+    depends_on:
+      - postgres
+    networks:
+      - workshop-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: steam-workshop-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-steam_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-steam_password}
+      POSTGRES_DB: ${POSTGRES_DB:-steam_workshop}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - workshop-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-steam_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  workshop-network:
+    driver: bridge
+

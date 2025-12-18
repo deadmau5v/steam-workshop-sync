@@ -26,18 +26,23 @@ class WorkshopParser:
 
         items = []
         for item_tag in items_tag:
+
+            # 基础
             item_id = item_tag.find(attrs={"class": "ugc"})["data-publishedfileid"]
             item_url = item_tag.find(attrs={"class": "ugc"})["href"]
             title_tag = item_tag.find(attrs={"class": "workshopItemTitle"})
             item_title = title_tag.text.strip() if title_tag else ""
-
+            
+            # 图片
             img_tag = item_tag.find(attrs={"class": "workshopItemPreviewImage"})
-            img_url = img_tag["src"] if img_tag else ""
-
+            coverview_url = img_tag["src"] if img_tag else ""
+            
+            # 作者信息  
             author_tag = item_tag.find(attrs={"class": "workshop_author_link"})
             author_name = author_tag.text.strip() if author_tag else ""
             author_profile = author_tag["href"] if author_tag else ""
 
+            # 评分
             rating_img_tag = item_tag.find(attrs={"class": "fileRating"})
             rating_img = rating_img_tag["src"] if rating_img_tag else None
             match = re.search(r"(?:(\d+)-star|not-yet)\.png", rating_img)
@@ -50,7 +55,7 @@ class WorkshopParser:
                 id=item_id,
                 url=item_url,
                 title=item_title,
-                img_url=img_url,
+                coverview_url=coverview_url,
                 author=author_name,
                 author_profile=author_profile,
                 rating=rating,
@@ -90,10 +95,11 @@ class WorkshopParser:
             attrs={"class": "detailsStatRight"}
         )
         if len(details_stats) == 3:
+            file_size: str = details_stats[0].text
             created_at = date_formater(details_stats[1].text)
             updated_at = date_formater(details_stats[2].text)
         else:
             created_at = date_formater(details_stats[1].text)
             updated_at = None
 
-        return description, created_at, updated_at
+        return description, created_at, updated_at, file_size

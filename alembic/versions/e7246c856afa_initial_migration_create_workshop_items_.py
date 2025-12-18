@@ -25,7 +25,7 @@ def upgrade() -> None:
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('url', sa.String(), nullable=False),
     sa.Column('title', sa.String(), nullable=False),
-    sa.Column('img_url', sa.String(), nullable=False),
+    sa.Column('coverview_url', sa.String(), nullable=False),
     sa.Column('author', sa.String(), nullable=False),
     sa.Column('author_profile', sa.String(), nullable=False),
     sa.Column('rating', sa.Integer(), nullable=True),
