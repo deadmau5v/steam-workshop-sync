@@ -3,6 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+
 class Pagination(BaseModel):
     items_count: int = 0
     current_page: int = 1

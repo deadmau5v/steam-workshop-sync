@@ -20,7 +20,9 @@ class Wrokshop:
 
         self.timeout = int(os.environ.get("STEAM_WORKSHOP_SYNC_TIMEOUT", 30))
         # 请求之间的基础延迟（秒）
-        self.request_delay = float(os.environ.get("STEAM_WORKSHOP_SYNC_REQUEST_DELAY", 1.0))
+        self.request_delay = float(
+            os.environ.get("STEAM_WORKSHOP_SYNC_REQUEST_DELAY", 1.0)
+        )
 
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
@@ -32,14 +34,14 @@ class Wrokshop:
     @retry_on_error(
         retry_on_status={
             429: None,  # 429 无限重试
-            500: 3,     # 服务器错误重试3次
+            500: 3,  # 服务器错误重试3次
             502: 3,
             503: 3,
             504: 3,
         },
         backoff_base=5.0,
         backoff_max=300.0,
-        default_retry=False
+        default_retry=False,
     )
     def _do_request(self, url: str, **kwargs) -> requests.Response:
         """执行HTTP请求（带重试机制）"""
@@ -61,7 +63,9 @@ class Wrokshop:
         url = "https://steamcommunity.com/workshop/browse/"
 
         logger.info(f"正在请求: {url}")
-        response = self._do_request(url, params=params, headers=self.headers, timeout=self.timeout)
+        response = self._do_request(
+            url, params=params, headers=self.headers, timeout=self.timeout
+        )
         response.encoding = response.apparent_encoding
 
         end_time = datetime.now()
@@ -72,10 +76,10 @@ class Wrokshop:
 
     def get_items_info(self, item: WorkshopItem):
         url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={item.id}"
-        
+
         # 在每个请求之间添加延迟，避免请求过快
         time.sleep(self.request_delay)
-        
+
         response = self._do_request(url, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
@@ -83,9 +87,11 @@ class Wrokshop:
             response.text
         )
         item_data = item.model_dump()
-        item_data.update({
-            "description": description,
-            "created_at": created_at,
-            "updated_at": updated_at,
-        })
+        item_data.update(
+            {
+                "description": description,
+                "created_at": created_at,
+                "updated_at": updated_at,
+            }
+        )
         return WorkshopItem.model_validate(item_data)

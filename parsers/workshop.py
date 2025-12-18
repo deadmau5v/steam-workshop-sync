@@ -1,4 +1,3 @@
-
 from bs4 import BeautifulSoup
 import html2text
 import re
@@ -8,8 +7,6 @@ from utils.formater import date_formater
 from utils.log import get_logger
 
 logger = get_logger(__name__)
-
-
 
 
 class WorkshopParser:
@@ -43,7 +40,7 @@ class WorkshopParser:
 
             rating_img_tag = item_tag.find(attrs={"class": "fileRating"})
             rating_img = rating_img_tag["src"] if rating_img_tag else None
-            match = re.search(r'(?:(\d+)-star|not-yet)\.png', rating_img)
+            match = re.search(r"(?:(\d+)-star|not-yet)\.png", rating_img)
             rating = None
 
             if match and match.group(1):
@@ -83,7 +80,9 @@ class WorkshopParser:
         soup = BeautifulSoup(html, "lxml")
 
         h = html2text.HTML2Text()
-        description = h.handle(soup.find(attrs={"class": "workshopItemDescription"}).prettify()).strip()
+        description = h.handle(
+            soup.find(attrs={"class": "workshopItemDescription"}).prettify()
+        ).strip()
         details_stats_container = soup.find(
             attrs={"class": "detailsStatsContainerRight"}
         )

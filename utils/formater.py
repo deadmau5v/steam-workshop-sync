@@ -9,7 +9,7 @@ def date_formater(date_str: str):
     """
     if "年" not in date_str:
         date_str = f"{datetime.now().year} 年 {date_str}"
-    
+
     if "下午" in date_str:
         time_str = date_str.split("下午")[1].strip()
         hour_str = int(time_str.split(":")[0]) + 12
@@ -18,18 +18,20 @@ def date_formater(date_str: str):
         date_str = f"{date_str.split('下午')[0].strip()} {time_str}"
     else:
         date_str = date_str.replace("上午", "").replace("  ", " ")
-    
+
     # Handle multiple date formats for robustness
     formats = [
         "%Y 年 %m 月 %d 日 %H:%M",
         "%Y 年 %m 月 %d 日 %H:%M",
-        "%Y 年 %m %b @ %I:%M%p",   # e.g., 2025 年 1 Nov @ 8:30am
-        "%Y 年 %d %b @ %I:%M%p",   # e.g., 2025 年 1 Nov @ 8:30am
-        "%Y 年 %b %d @ %I:%M%p",    # e.g., 2025 年 Nov 1 @ 8:30am
+        "%Y 年 %m %b @ %I:%M%p",  # e.g., 2025 年 1 Nov @ 8:30am
+        "%Y 年 %d %b @ %I:%M%p",  # e.g., 2025 年 1 Nov @ 8:30am
+        "%Y 年 %b %d @ %I:%M%p",  # e.g., 2025 年 Nov 1 @ 8:30am
     ]
     for fmt in formats:
         try:
             return datetime.strptime(date_str, fmt)
         except ValueError:
             continue
-    raise ValueError(f"time data '{date_str}' does not match supported formats: {formats}")
+    raise ValueError(
+        f"time data '{date_str}' does not match supported formats: {formats}"
+    )
