@@ -89,18 +89,22 @@ class WorkshopParser:
             soup.find(attrs={"class": "workshopItemDescription"}).prettify()
         ).strip()
         details_stats_container = soup.find(
-            attrs={"class": "detailsStatsContainerRight"}
+            attrs={"class": "rightDetailsBlock"}
         )
-        details_stats = details_stats_container.find_all(
+
+        details_stats_keys = details_stats_container.find_all(
+            attrs={"class": "detailsStatLeft"}
+        )
+        details_stats_values = details_stats_container.find_all(
             attrs={"class": "detailsStatRight"}
         )
-        if len(details_stats) == 3:
-            file_size: str = details_stats[0].text
-            created_at = date_formater(details_stats[1].text)
-            updated_at = date_formater(details_stats[2].text)
-        else:
-            file_size = None
-            created_at = date_formater(details_stats[1].text)
-            updated_at = None
+
+        details_stats_keys = [key.text.strip() for key in details_stats_keys]
+        details_stats_values = [value.text.strip() for value in details_stats_values]
+        details_stats = dict(zip(details_stats_keys, details_stats_values))
+
+        created_at = date_formater(details_stats.get("Posted", None))
+        updated_at = date_formater(details_stats.get("Updated", None))
+        file_size: str | None = details_stats.get("File Size", None)
 
         return description, created_at, updated_at, file_size

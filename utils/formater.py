@@ -1,12 +1,15 @@
 from datetime import datetime
 
 
-def date_formater(date_str: str):
+def date_formater(date_str: str | None) -> datetime | None:
     """
     10 月 18 日 下午 11:37
     2017 年 12 月 2 日 上午 10:37
     转为datetime格式
     """
+    if not date_str:
+        return None
+
     if "年" not in date_str:
         date_str = f"{datetime.now().year} 年 {date_str}"
 
