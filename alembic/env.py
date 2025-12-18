@@ -23,9 +23,10 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # 导入数据库模型以支持自动生成迁移
-from database import Base
+from sqlmodel import SQLModel
+from models.workshop import WorkshopItem
 
-target_metadata = Base.metadata
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

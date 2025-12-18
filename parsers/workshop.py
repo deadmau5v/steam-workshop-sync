@@ -60,7 +60,7 @@ class WorkshopParser:
         return {"pagination": pagination, "items": items}
 
     @staticmethod
-    def parser_pagination(paging_soup):
+    def parser_pagination(paging_soup) -> Pagination:
         controls = paging_soup.find(attrs={"class": "workshopBrowsePagingControls"})
         page_links = [
             a.get_text(strip=True)
