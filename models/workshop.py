@@ -24,7 +24,7 @@ class WorkshopItem(SQLModel, table=True):
     author_profile: str
     rating: Optional[int] = None
     description: Optional[str] = None
-    file_size: Optional[str] = None
+    file_size: int = Field(default=0)
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

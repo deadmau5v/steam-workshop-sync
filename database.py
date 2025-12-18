@@ -50,16 +50,9 @@ def save_workshop_item(
             if not exist_ok:
                 return existing
             
-            # 更新现有记录
-            existing.url = item.url
-            existing.title = item.title
-            existing.coverview_url = item.coverview_url
-            existing.author = item.author
-            existing.author_profile = item.author_profile
-            existing.rating = item.rating
-            existing.description = item.description
-            existing.created_at = item.created_at
-            existing.updated_at = item.updated_at
+            update_data = item.model_dump(exclude={'id', 'synced_at'})
+            for key, value in update_data.items():
+                setattr(existing, key, value)
             existing.synced_at = datetime.utcnow()
             
             db.commit()

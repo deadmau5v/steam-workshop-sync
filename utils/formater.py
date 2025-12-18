@@ -38,3 +38,23 @@ def date_formater(date_str: str | None) -> datetime | None:
     raise ValueError(
         f"time data '{date_str}' does not match supported formats: {formats}"
     )
+
+
+def file_size_formater(file_size: str | None) -> int:
+    """
+    文件大小格式化
+    77.308 KB -> 77308
+    1.633 MB -> 1633000
+
+    """
+    if not file_size:
+        return 0
+
+    if "KB" in file_size:
+        return int(float(file_size.split(" ")[0]) * 1024)
+    elif "MB" in file_size:
+        return int(float(file_size.split(" ")[0]) * 1024 * 1024)
+    elif "GB" in file_size:
+        return int(float(file_size.split(" ")[0]) * 1024 * 1024 * 1024)
+
+    return file_size

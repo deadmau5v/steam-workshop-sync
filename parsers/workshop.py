@@ -3,7 +3,7 @@ import html2text
 import re
 
 from models.workshop import WorkshopItem, Pagination
-from utils.formater import date_formater
+from utils.formater import date_formater, file_size_formater
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -105,6 +105,6 @@ class WorkshopParser:
 
         created_at = date_formater(details_stats.get("Posted", None))
         updated_at = date_formater(details_stats.get("Updated", None))
-        file_size: str | None = details_stats.get("File Size", None)
+        file_size = file_size_formater(details_stats.get("File Size", None))
 
         return description, created_at, updated_at, file_size
