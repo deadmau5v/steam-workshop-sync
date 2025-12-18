@@ -66,7 +66,13 @@ def image_url_formater(image_url: str | None) -> str | None:
     if not image_url:
         return None
     
+    block_images = ["zoom_icon.png", "icon_thumbsup.png", "icon_thumbsdown.png", 'trans.gif', "steam_workshop_default_image.png"]
+    for block_image in block_images:
+        if block_image in image_url:
+            return None
+
     if "?" in image_url:
         return image_url.split("?")[0]
+    
 
     return image_url

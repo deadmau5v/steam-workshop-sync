@@ -108,7 +108,6 @@ class WorkshopParser:
         file_size = file_size_formater(details_stats.get("File Size", None))
 
         images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
-        images = list(set([image_url_formater(img["src"]) for img in images_tag]))
-
-
+        images = list(set([image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])]))
+        
         return description, created_at, updated_at, file_size, images
