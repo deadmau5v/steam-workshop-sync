@@ -99,6 +99,7 @@ class WorkshopParser:
             created_at = date_formater(details_stats[1].text)
             updated_at = date_formater(details_stats[2].text)
         else:
+            file_size = None
             created_at = date_formater(details_stats[1].text)
             updated_at = None
 
