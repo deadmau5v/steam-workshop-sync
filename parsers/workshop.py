@@ -88,14 +88,15 @@ class WorkshopParser:
         description = h.handle(
             soup.find(attrs={"class": "workshopItemDescription"}).prettify()
         ).strip()
-        details_stats_container = soup.find(
-            attrs={"class": "rightDetailsBlock"}
-        )
 
-        details_stats_keys = details_stats_container.find_all(
+        responsive_local_menu = soup.find(
+            attrs={"class": "workshopItemPreviewArea"}
+        ).find(attrs={"class": "responsive_local_menu"})
+
+        details_stats_keys = responsive_local_menu.find_all(
             attrs={"class": "detailsStatLeft"}
         )
-        details_stats_values = details_stats_container.find_all(
+        details_stats_values = responsive_local_menu.find_all(
             attrs={"class": "detailsStatRight"}
         )
 
@@ -103,9 +104,11 @@ class WorkshopParser:
         details_stats_values = [value.text.strip() for value in details_stats_values]
         details_stats = dict(zip(details_stats_keys, details_stats_values))
 
-        created_at = date_formater(details_stats.get("Posted", None))
-        updated_at = date_formater(details_stats.get("Updated", None))
-        file_size = file_size_formater(details_stats.get("File Size", None))
+        logger.debug(f"MetaData: {details_stats}")
+
+        created_at = date_formater(details_stats.get("Posted", None) or details_stats.get("发表于", None))
+        updated_at = date_formater(details_stats.get("Updated", None) or details_stats.get("更新于", None))
+        file_size = file_size_formater(details_stats.get("File Size", None) or details_stats.get("文件大小", None))
 
         images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
         images = list(set([image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])]))
