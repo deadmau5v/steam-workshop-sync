@@ -10,7 +10,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/你的用户名/steam-workshop-sync.git
+git clone https://github.com/deadmau5v/steam-workshop-sync.git
 cd steam-workshop-sync
 
 # 2. 初始化环境配置（交互式）
@@ -40,7 +40,7 @@ docker run -d \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
   -e STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0 \
   -e STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0 \
-  ghcr.io/你的用户名/steam-workshop-sync:latest
+  ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 
 ### 3. 本地开发
@@ -108,10 +108,10 @@ uv run python main.py
 4. **使用发布的镜像**
    ```bash
    # 拉取特定版本
-   docker pull ghcr.io/你的用户名/steam-workshop-sync:v1.0.0
+   docker pull ghcr.io/deadmau5v/steam-workshop-sync:v1.0.0
 
    # 拉取最新版本
-   docker pull ghcr.io/你的用户名/steam-workshop-sync:latest
+   docker pull ghcr.io/deadmau5v/steam-workshop-sync:latest
    ```
 
 ### 配置 GitHub Actions
@@ -195,20 +195,20 @@ git push origin v2.0.0
 示例：
 ```bash
 # 拉取特定版本（自动选择适合的架构）
-docker pull ghcr.io/你的用户名/steam-workshop-sync:v1.2.3
+docker pull ghcr.io/deadmau5v/steam-workshop-sync:v1.2.3
 
 # 拉取 1.2.x 最新版
-docker pull ghcr.io/你的用户名/steam-workshop-sync:v1.2
+docker pull ghcr.io/deadmau5v/steam-workshop-sync:v1.2
 
 # 拉取 1.x.x 最新版
-docker pull ghcr.io/你的用户名/steam-workshop-sync:v1
+docker pull ghcr.io/deadmau5v/steam-workshop-sync:v1
 
 # 拉取最新版
-docker pull ghcr.io/你的用户名/steam-workshop-sync:latest
+docker pull ghcr.io/deadmau5v/steam-workshop-sync:latest
 
 # 强制拉取特定架构
-docker pull --platform linux/amd64 ghcr.io/你的用户名/steam-workshop-sync:latest
-docker pull --platform linux/arm64 ghcr.io/你的用户名/steam-workshop-sync:latest
+docker pull --platform linux/amd64 ghcr.io/deadmau5v/steam-workshop-sync:latest
+docker pull --platform linux/arm64 ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 
 ### 安全和合规性
@@ -238,10 +238,10 @@ docker pull --platform linux/arm64 ghcr.io/你的用户名/steam-workshop-sync:l
 # 2. 查看 Trivy 扫描结果
 
 # 下载 SBOM
-curl -L -o sbom.json https://github.com/你的用户名/steam-workshop-sync/releases/download/v1.0.0/sbom.spdx.json
+curl -L -o sbom.json https://github.com/deadmau5v/steam-workshop-sync/releases/download/v1.0.0/sbom.spdx.json
 
 # 验证镜像
-docker buildx imagetools inspect ghcr.io/你的用户名/steam-workshop-sync:v1.0.0
+docker buildx imagetools inspect ghcr.io/deadmau5v/steam-workshop-sync:v1.0.0
 ```
 
 ## 🔧 配置说明
@@ -353,7 +353,7 @@ docker-compose logs postgres
 
 确保你已登录 GHCR：
 ```bash
-echo $GITHUB_TOKEN | docker login ghcr.io -u 你的用户名 --password-stdin
+echo $GITHUB_TOKEN | docker login ghcr.io -u deadmau5v --password-stdin
 ```
 
 ### 4. GitHub Actions 失败

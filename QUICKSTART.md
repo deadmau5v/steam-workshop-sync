@@ -8,7 +8,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/你的用户名/steam-workshop-sync.git
+git clone https://github.com/deadmau5v/steam-workshop-sync.git
 cd steam-workshop-sync
 
 # 2. 快速配置（一行命令）
@@ -40,7 +40,7 @@ docker run -d \
   --name steam-workshop-sync \
   --restart unless-stopped \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:pass@host:5432/db" \
-  ghcr.io/你的用户名/steam-workshop-sync:latest
+  ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 
 ## 方法 3: 交互式配置
@@ -49,7 +49,7 @@ docker run -d \
 
 ```bash
 # 克隆项目
-git clone https://github.com/你的用户名/steam-workshop-sync.git
+git clone https://github.com/deadmau5v/steam-workshop-sync.git
 cd steam-workshop-sync
 
 # 运行配置脚本（会提示输入配置）
@@ -130,9 +130,9 @@ SELECT id, title, author FROM workshop_items LIMIT 10;
 
 ## 📞 获取帮助
 
-- 🐛 [提交 Issue](https://github.com/你的用户名/steam-workshop-sync/issues)
+- 🐛 [提交 Issue](https://github.com/deadmau5v/steam-workshop-sync/issues)
 - 📚 [查看文档](README.md)
-- 💬 [讨论区](https://github.com/你的用户名/steam-workshop-sync/discussions)
+- 💬 [讨论区](https://github.com/deadmau5v/steam-workshop-sync/discussions)
 
 ---
 

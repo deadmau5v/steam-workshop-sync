@@ -1,8 +1,7 @@
 # Steam Workshop Sync
 
-[![Build and Release](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/release.yml/badge.svg)](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/release.yml)
-[![Security Scan](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/security-scan.yml/badge.svg)](https://github.com/你的用户名/steam-workshop-sync/actions/workflows/security-scan.yml)
-[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/你的用户名/steam-workshop-sync/pkgs/container/steam-workshop-sync)
+[![Build and Release](https://github.com/deadmau5v/steam-workshop-sync/actions/workflows/release.yml/badge.svg)](https://github.com/deadmau5v/steam-workshop-sync/actions/workflows/release.yml)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/deadmau5v/steam-workshop-sync/pkgs/container/steam-workshop-sync)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Steam Workshop 数据同步工具，用于监控和同步 Steam 创意工坊的物品数据到数据库。
@@ -25,7 +24,7 @@ Steam Workshop 数据同步工具，用于监控和同步 Steam 创意工坊的�
 
 1. 克隆仓库：
 ```bash
-git clone https://github.com/你的用户名/steam-workshop-sync.git
+git clone https://github.com/deadmau5v/steam-workshop-sync.git
 cd steam-workshop-sync
 ```
 
@@ -69,7 +68,7 @@ docker run -d \
   -e STEAM_WORKSHOP_SYNC_DATABASE_URL="postgresql://user:password@host:5432/db" \
   -e STEAM_WORKSHOP_SYNC_PAGE_DELAY=5.0 \
   -e STEAM_WORKSHOP_SYNC_CYCLE_DELAY=60.0 \
-  ghcr.io/你的用户名/steam-workshop-sync:latest
+  ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 
 ### 方式三：本地开发运行
@@ -190,9 +189,9 @@ git push origin v1.0.0
 
 3. 拉取镜像：
 ```bash
-docker pull ghcr.io/你的用户名/steam-workshop-sync:v1.0.0
+docker pull ghcr.io/deadmau5v/steam-workshop-sync:v1.0.0
 # 或使用 latest
-docker pull ghcr.io/你的用户名/steam-workshop-sync:latest
+docker pull ghcr.io/deadmau5v/steam-workshop-sync:latest
 ```
 
 ### 配置 GHCR
