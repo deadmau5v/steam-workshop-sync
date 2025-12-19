@@ -23,6 +23,7 @@ class TestDateFormater:
 
     def test_english_standard_format(self):
         """测试标准英文格式: 'May 12, 2022 @ 12:43pm'"""
+        # 月在前的标准格式
         result = date_formater("May 12, 2022 @ 12:43pm")
         assert result == datetime(2022, 5, 12, 12, 43)
 
@@ -31,6 +32,16 @@ class TestDateFormater:
 
         result = date_formater("Jan 1, 2020 @ 12:00am")
         assert result == datetime(2020, 1, 1, 0, 0)
+
+        # 日在前的标准格式
+        result = date_formater("1 Dec, 2019 @ 11:26am")
+        assert result == datetime(2019, 12, 1, 11, 26)
+
+        result = date_formater("8 Dec, 2019 @ 3:14pm")
+        assert result == datetime(2019, 12, 8, 15, 14)
+
+        result = date_formater("11 Dec, 2019 @ 2:34am")
+        assert result == datetime(2019, 12, 11, 2, 34)
 
     def test_english_day_first_no_year(self):
         """测试日期在前、无年份格式: '12 Dec @ 7:12am'"""

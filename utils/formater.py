@@ -106,17 +106,25 @@ def _parse_english_simple(date_str: str) -> datetime | None:
     解析简单的英文日期格式（无年份或带逗号的标准格式）。
 
     支持的格式：
-        - 'May 12, 2022 @ 12:43pm'  # 标准格式
-        - '12 Dec @ 7:12am'          # 日在前
-        - 'Dec 12 @ 7:12am'          # 月在前
+        - 'May 12, 2022 @ 12:43pm'  # 标准格式（月在前）
+        - '1 Dec, 2019 @ 11:26am'    # 标准格式（日在前）
+        - '12 Dec @ 7:12am'          # 日在前，无年份
+        - 'Dec 12 @ 7:12am'          # 月在前，无年份
     """
     current_year = datetime.now().year
 
-    # 格式：MMM DD, YYYY @ HH:MMam/pm (标准格式)
+    # 格式：MMM DD, YYYY @ HH:MMam/pm (标准格式，月在前)
     pattern1 = r"^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
     match = re.match(pattern1, date_str, re.IGNORECASE)
     if match:
         month, day, year, time_str = match.groups()
+        return _parse_datetime(f"{year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+
+    # 格式：DD MMM, YYYY @ HH:MMam/pm (标准格式，日在前)
+    pattern1b = r"^(\d{1,2})\s+([A-Za-z]{3}),\s*(\d{4})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
+    match = re.match(pattern1b, date_str, re.IGNORECASE)
+    if match:
+        day, month, year, time_str = match.groups()
         return _parse_datetime(f"{year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
 
     # 格式：DD MMM @ HH:MMam/pm (日在前，无年份)
