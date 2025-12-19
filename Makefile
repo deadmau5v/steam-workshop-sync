@@ -57,3 +57,9 @@ dev-upgrade: ## 应用数据库迁移
 dev-downgrade: ## 回滚数据库迁移
 	uv run alembic downgrade -1
 
+dev-test: ## 运行单元测试
+	uv run pytest tests/ -v
+
+dev-test-coverage: ## 运行单元测试并生成覆盖率报告
+	uv run pytest tests/ -v --cov=. --cov-report=html --cov-report=term
+

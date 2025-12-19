@@ -4,201 +4,290 @@ import re
 
 def date_formater(date_str: str | None) -> datetime | None:
     """
-    支持多种 Steam Workshop 日期格式：
-    例：
-    - 10 月 18 日 下午 11:37
-    - 2017 年 12 月 2 日 上午 10:37
-    - 12 Dec @ 7:12am
-    - 2017 年 12 Dec @ 7:12am
-    - 13 Dec @ 3:45am
-    - 1 Nov @ 8:30am
-    转为 datetime 格式
-    """
-    import re
+    解析 Steam Workshop 的多种日期格式并转换为 datetime 对象。
 
+    支持的格式：
+
+    英文格式：
+        - 'May 12, 2022 @ 12:43pm'          # 标准格式
+        - '12 Dec @ 7:12am'                 # 无年份（使用当前年份）
+        - 'Dec 12 @ 7:12am'                 # 月份在前
+        - '2017 年 12 Dec @ 7:12am'          # 带中文年份前缀
+        - '2025 年 May 12, 2022 @ 12:43pm'  # 错误年份前缀（使用逗号后的年份）
+
+    中文格式：
+        - '10 月 18 日 下午 11:37'           # 无年份（使用当前年份）
+        - '2017 年 12 月 2 日 上午 10:37'    # 完整日期时间
+
+    Args:
+        date_str: 日期字符串，可能为 None
+
+    Returns:
+        datetime 对象，如果输入为 None 则返回 None
+
+    Raises:
+        ValueError: 如果日期字符串格式不被支持
+    """
     if not date_str:
         return None
 
     date_str = date_str.strip()
+    if not date_str:
+        return None
 
-    # 英文格式: '12 Dec @ 7:12am' 或 '2017 年 12 Dec @ 7:12am'
-    # 补全年份
-
-    # 处理异常格式: '2025 年 Nov 22, 2019 @ 5:02pm' (年份前缀错误,实际日期中包含正确年份)
-    match_en_malformed = re.match(
-        r"^(?:\d{4}) 年 ([A-Za-z]{3}) (\d{1,2}), (\d{4}) @ (\d{1,2}:\d{2}[ap]m)",
-        date_str,
-    )
-    if match_en_malformed:
-        # 使用实际日期中的年份,忽略前缀年份
-        month = match_en_malformed.group(1)
-        day = match_en_malformed.group(2)
-        year = match_en_malformed.group(3)
-        time_str = match_en_malformed.group(4)
-        dt_str = f"{year} {month} {day} {time_str}"
-        try:
-            return datetime.strptime(dt_str, "%Y %b %d %I:%M%p")
-        except Exception:
-            pass
-
-    match_en = re.match(
-        r"^(?:(\d{4}) 年 )?(\d{1,2}|[A-Za-z]{3,}) ([A-Za-z]{3}|[0-9]{1,2}) @ (\d{1,2}:\d{2}[ap]m)",
-        date_str,
-    )
-    match_en_simple = re.match(
-        r"^(\d{1,2}) ([A-Za-z]{3}) @ (\d{1,2}:\d{2}[ap]m)",
-        date_str,
-    )
-    match_en_full = re.match(
-        r"^(\d{4}) 年 (\d{1,2}) ([A-Za-z]{3}) @ (\d{1,2}[ap]m)",
-        date_str,
-    )
-    match_en_month_first = re.match(
-        r"^([A-Za-z]{3}) (\d{1,2}) @ (\d{1,2}:\d{2}[ap]m)",
-        date_str,
-    )
-
-    if match_en:
-        # 可能是 2017 年 12 Dec @ 7:12am 或 12 Dec @ 7:12am
-        year = match_en.group(1) or str(datetime.now().year)
-        d1 = match_en.group(2)
-        d2 = match_en.group(3)
-        time_str = match_en.group(4)
-        # 解析月和日
-        try:
-            # d1 数字: 日，d2 英文: 月
-            day = int(d1)
-            month = d2
-        except ValueError:
-            # d1 英文: 月，d2 数字: 日
-            month = d1
-            day = int(d2)
-        dt_str = f"{year} {month} {day} {time_str}"
-        try:
-            return datetime.strptime(dt_str, "%Y %b %d %I:%M%p")
-        except Exception:
-            pass
-
-    elif match_en_full:
-        # 2017 年 12 Dec @ 7:12am
-        year = match_en_full.group(1)
-        day = match_en_full.group(2)
-        month = match_en_full.group(3)
-        time_str = match_en_full.group(4)
-        dt_str = f"{year} {month} {int(day)} {time_str}"
-        try:
-            return datetime.strptime(dt_str, "%Y %b %d %I:%M%p")
-        except Exception:
-            pass
-
-    elif match_en_simple:
-        # 12 Dec @ 7:12am
-        day = int(match_en_simple.group(1))
-        month = match_en_simple.group(2)
-        time_str = match_en_simple.group(3)
-        year = str(datetime.now().year)
-        dt_str = f"{year} {month} {day} {time_str}"
-        try:
-            return datetime.strptime(dt_str, "%Y %b %d %I:%M%p")
-        except Exception:
-            pass
-
-    elif match_en_month_first:
-        # Dec 12 @ 7:12am
-        month = match_en_month_first.group(1)
-        day = int(match_en_month_first.group(2))
-        time_str = match_en_month_first.group(3)
-        year = str(datetime.now().year)
-        dt_str = f"{year} {month} {day} {time_str}"
-        try:
-            return datetime.strptime(dt_str, "%Y %b %d %I:%M%p")
-        except Exception:
-            pass
-
-    # 中文格式
-    # 年份处理
-    if "年" not in date_str:
-        date_str = f"{datetime.now().year} 年 {date_str}"
-
-    if "下午" in date_str:
-        m = re.search(r"下午\s*(\d{1,2}):(\d{2})", date_str)
-        if m:
-            hour = int(m.group(1))
-            minute = m.group(2)
-            # 12 点特殊处理
-            if hour < 12:
-                hour += 12
-            time_str = f"{hour}:{minute}"
-            date_str = re.sub(r"下午\s*\d{1,2}:\d{2}", time_str, date_str)
-        date_str = date_str.replace("下午", "")
-    elif "上午" in date_str:
-        date_str = date_str.replace("上午", "")
-        # 保证没有多余空格
-        date_str = re.sub(r"\s+", " ", date_str)
-    else:
-        date_str = re.sub(r"\s+", " ", date_str)
-
-    # 尝试如常规中文日期
-    formats = [
-        "%Y 年 %m 月 %d 日 %H:%M",
-        "%Y 年 %m 月 %d 日 %H:%M",
-        "%Y 年 %m %b @ %I:%M%p",  # 为兼容保留
-        "%Y 年 %d %b @ %I:%M%p",
-        "%Y 年 %b %d @ %I:%M%p",
+    # 定义日期解析器列表，按优先级排序
+    parsers = [
+        _parse_malformed_english_with_year,
+        _parse_english_with_chinese_year_prefix,
+        _parse_english_simple,
+        _parse_chinese,
     ]
-    for fmt in formats:
-        try:
-            return datetime.strptime(date_str, fmt)
-        except Exception:
-            continue
 
+    # 尝试每个解析器
+    for parser in parsers:
+        result = parser(date_str)
+        if result is not None:
+            return result
+
+    # 如果所有解析器都失败，抛出异常
     raise ValueError(
-        f"time data '{date_str}' does not match supported formats: {formats}"
+        f"无法解析日期字符串: '{date_str}'\n"
+        f"支持的格式请参考 date_formater 函数文档"
     )
+
+
+def _parse_malformed_english_with_year(date_str: str) -> datetime | None:
+    """
+    解析错误的年份前缀格式: '2025 年 May 12, 2022 @ 12:43pm'
+
+    Steam 有时会返回带有错误年份前缀的日期，实际年份在逗号之后。
+    这个解析器提取逗号后的正确年份。
+    """
+    pattern = r"^(?:\d{4})\s*年\s*([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
+    match = re.match(pattern, date_str, re.IGNORECASE)
+
+    if match:
+        month, day, year, time_str = match.groups()
+        return _parse_datetime(f"{year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+
+    return None
+
+
+def _parse_english_with_chinese_year_prefix(date_str: str) -> datetime | None:
+    """
+    解析带中文年份前缀的英文日期格式。
+
+    支持的格式：
+        - '2017 年 12 Dec @ 7:12am'
+        - '2017 年 Dec 12 @ 7:12am'
+    """
+    # 格式：YYYY 年 DD MMM @ HH:MMam/pm 或 YYYY 年 MMM DD @ HH:MMam/pm
+    pattern = r"^(\d{4})\s*年\s*(\d{1,2}|[A-Za-z]{3})\s+([A-Za-z]{3}|\d{1,2})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
+    match = re.match(pattern, date_str, re.IGNORECASE)
+
+    if match:
+        year, part1, part2, time_str = match.groups()
+
+        # 判断哪个是月份，哪个是日期
+        if part1.isdigit():
+            # part1 是日期，part2 是月份
+            day, month = part1, part2
+        else:
+            # part1 是月份，part2 是日期
+            month, day = part1, part2
+
+        return _parse_datetime(f"{year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+
+    return None
+
+
+def _parse_english_simple(date_str: str) -> datetime | None:
+    """
+    解析简单的英文日期格式（无年份或带逗号的标准格式）。
+
+    支持的格式：
+        - 'May 12, 2022 @ 12:43pm'  # 标准格式
+        - '12 Dec @ 7:12am'          # 日在前
+        - 'Dec 12 @ 7:12am'          # 月在前
+    """
+    current_year = datetime.now().year
+
+    # 格式：MMM DD, YYYY @ HH:MMam/pm (标准格式)
+    pattern1 = r"^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
+    match = re.match(pattern1, date_str, re.IGNORECASE)
+    if match:
+        month, day, year, time_str = match.groups()
+        return _parse_datetime(f"{year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+
+    # 格式：DD MMM @ HH:MMam/pm (日在前，无年份)
+    pattern2 = r"^(\d{1,2})\s+([A-Za-z]{3})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
+    match = re.match(pattern2, date_str, re.IGNORECASE)
+    if match:
+        day, month, time_str = match.groups()
+        return _parse_datetime(f"{current_year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+
+    # 格式：MMM DD @ HH:MMam/pm (月在前，无年份)
+    pattern3 = r"^([A-Za-z]{3})\s+(\d{1,2})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
+    match = re.match(pattern3, date_str, re.IGNORECASE)
+    if match:
+        month, day, time_str = match.groups()
+        return _parse_datetime(f"{current_year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+
+    return None
+
+
+def _parse_chinese(date_str: str) -> datetime | None:
+    """
+    解析中文日期格式。
+
+    支持的格式：
+        - '10 月 18 日 下午 11:37'
+        - '2017 年 12 月 2 日 上午 10:37'
+        - '2017 年 12 月 2 日 23:37'  # 24小时制
+    """
+    original_str = date_str
+    current_year = datetime.now().year
+
+    # 如果没有年份，添加当前年份
+    if "年" not in date_str:
+        date_str = f"{current_year} 年 {date_str}"
+
+    # 处理中文时间标识符（上午/下午）
+    if "下午" in date_str:
+        # 提取下午时间并转换为24小时制
+        time_match = re.search(r"下午\s*(\d{1,2}):(\d{2})", date_str)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = time_match.group(2)
+            # 下午12点特殊处理（12:xx PM 仍是12:xx）
+            if hour != 12:
+                hour += 12
+            date_str = re.sub(r"下午\s*\d{1,2}:\d{2}", f"{hour}:{minute}", date_str)
+        date_str = date_str.replace("下午", "").strip()
+    elif "上午" in date_str:
+        # 上午时间需要处理12点的情况（12:xx AM 应该是 00:xx）
+        time_match = re.search(r"上午\s*(\d{1,2}):(\d{2})", date_str)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = time_match.group(2)
+            if hour == 12:
+                hour = 0
+            date_str = re.sub(r"上午\s*\d{1,2}:\d{2}", f"{hour}:{minute}", date_str)
+        date_str = date_str.replace("上午", "").strip()
+
+    # 标准化空格
+    date_str = re.sub(r"\s+", " ", date_str).strip()
+
+    # 尝试中文日期格式
+    formats = [
+        "%Y 年 %m 月 %d 日 %H:%M",  # 2017 年 12 月 2 日 10:37
+    ]
+
+    for fmt in formats:
+        result = _parse_datetime(date_str, fmt)
+        if result is not None:
+            return result
+
+    return None
+
+
+def _parse_datetime(date_str: str, format_str: str) -> datetime | None:
+    """
+    辅助函数：尝试使用指定格式解析日期字符串。
+
+    Args:
+        date_str: 日期字符串
+        format_str: strptime 格式字符串
+
+    Returns:
+        datetime 对象，解析失败返回 None
+    """
+    try:
+        return datetime.strptime(date_str, format_str)
+    except (ValueError, TypeError):
+        return None
 
 
 def file_size_formater(file_size: str | None) -> int:
     """
-    文件大小格式化
-    77.308 KB -> 77308
-    1.633 MB -> 1633000
+    将 Steam Workshop 文件大小字符串转换为字节数。
 
+    支持的格式：
+        - '77.308 KB'  -> 79,163 bytes
+        - '1.633 MB'   -> 1,712,128 bytes
+        - '2.1 GB'     -> 2,254,857,830 bytes
+        - '123456'     -> 123,456 bytes
+
+    Args:
+        file_size: 文件大小字符串，可能为 None
+
+    Returns:
+        文件大小（字节），如果输入为 None 或无法解析则返回 0
     """
     if not file_size:
         return 0
 
-    s = file_size.strip()
+    size_str = file_size.strip()
 
-    # Common Steam formats like "77.308 KB", "1.633 MB", "2.1 GB"
-    if "KB" in s:
-        return int(float(s.split(" ")[0]) * 1024)
-    if "MB" in s:
-        return int(float(s.split(" ")[0]) * 1024 * 1024)
-    if "GB" in s:
-        return int(float(s.split(" ")[0]) * 1024 * 1024 * 1024)
+    # 尝试提取数值和单位
+    match = re.match(r"^([\d.]+)\s*(KB|MB|GB|bytes?)?$", size_str, re.IGNORECASE)
 
-    # Plain integer strings like "123456"
-    if s.isdigit():
-        return int(s)
+    if match:
+        value = float(match.group(1))
+        unit = match.group(2)
 
-    # Fallback: extract digits from formats like "123 bytes", "Size: 1234"
-    digits = re.sub(r"[^0-9]", "", s)
+        if unit:
+            unit_upper = unit.upper()
+            if "KB" in unit_upper:
+                return int(value * 1024)
+            elif "MB" in unit_upper:
+                return int(value * 1024 * 1024)
+            elif "GB" in unit_upper:
+                return int(value * 1024 * 1024 * 1024)
+            elif "BYTE" in unit_upper:
+                return int(value)
+        else:
+            # 纯数字，假设为字节
+            return int(value)
+
+    # 如果正则匹配失败，尝试提取所有数字作为后备方案
+    digits = re.sub(r"[^0-9]", "", size_str)
     return int(digits) if digits else 0
+
 
 def image_url_formater(image_url: str | None) -> str | None:
     """
-    图片URL格式化
+    格式化和过滤 Steam Workshop 图片 URL。
+
+    功能：
+        1. 过滤掉 Steam 的图标和占位符图片
+        2. 移除 URL 中的查询参数
+
+    Args:
+        image_url: 图片 URL 字符串，可能为 None
+
+    Returns:
+        清理后的 URL，如果是需要过滤的图片则返回 None
     """
     if not image_url:
         return None
-    
-    block_images = ["zoom_icon.png", "icon_thumbsup.png", "icon_thumbsdown.png", 'trans.gif', "steam_workshop_default_image.png"]
-    for block_image in block_images:
-        if block_image in image_url:
+
+    # 需要过滤的 Steam 图标和占位符图片
+    blocked_images = [
+        "zoom_icon.png",
+        "icon_thumbsup.png",
+        "icon_thumbsdown.png",
+        "trans.gif",
+        "steam_workshop_default_image.png",
+    ]
+
+    # 检查是否包含需要过滤的图片
+    for blocked_image in blocked_images:
+        if blocked_image in image_url:
             return None
 
+    # 移除 URL 查询参数
     if "?" in image_url:
         return image_url.split("?")[0]
-    
 
     return image_url
