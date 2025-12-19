@@ -16,7 +16,9 @@ class Wrokshop:
     def __init__(self) -> None:
         self.appid = os.environ.get("STEAM_WORKSHOP_SYNC_APP_ID")
         if not self.appid:
-            raise EnvironmentError("没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）")
+            raise EnvironmentError(
+                "没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）"
+            )
 
         self.timeout = int(os.environ.get("STEAM_WORKSHOP_SYNC_TIMEOUT", 30))
         # 请求之间的基础延迟（秒）
@@ -83,8 +85,8 @@ class Wrokshop:
         response = self._do_request(url, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
-        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(
-            response.text
+        description, created_at, updated_at, file_size, images = (
+            WorkshopParser.parser_items_info(response.text)
         )
         item_data = item.model_dump()
         item_data.update(

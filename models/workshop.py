@@ -14,9 +14,9 @@ class Pagination(BaseModel):
 
 class WorkshopItem(SQLModel, table=True):
     """Workshop Item model"""
-    
+
     __tablename__ = "workshop_items"
-    
+
     id: str = Field(primary_key=True, index=True)
     url: str
     title: str = Field(index=True)

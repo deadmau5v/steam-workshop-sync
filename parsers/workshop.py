@@ -26,18 +26,17 @@ class WorkshopParser:
 
         items = []
         for item_tag in items_tag:
-
             # 基础
             item_id = item_tag.find(attrs={"class": "ugc"})["data-publishedfileid"]
             item_url = item_tag.find(attrs={"class": "ugc"})["href"]
             title_tag = item_tag.find(attrs={"class": "workshopItemTitle"})
             item_title = title_tag.text.strip() if title_tag else ""
-            
+
             # 图片
             img_tag = item_tag.find(attrs={"class": "workshopItemPreviewImage"})
             coverview_url = img_tag["src"] if img_tag else ""
-            
-            # 作者信息  
+
+            # 作者信息
             author_tag = item_tag.find(attrs={"class": "workshop_author_link"})
             author_name = author_tag.text.strip() if author_tag else ""
             author_profile = author_tag["href"] if author_tag else ""
@@ -106,11 +105,32 @@ class WorkshopParser:
 
         logger.debug(f"MetaData: {details_stats}")
 
-        created_at = date_formater(details_stats.get("Posted", None) or details_stats.get("发表于", None))
-        updated_at = date_formater(details_stats.get("Updated", None) or details_stats.get("更新于", None))
-        file_size = file_size_formater(details_stats.get("File Size", None) or details_stats.get("文件大小", None))
+        created_at = date_formater(
+            details_stats.get("Posted", None) or details_stats.get("发表于", None)
+        )
+        updated_at = date_formater(
+            details_stats.get("Updated", None) or details_stats.get("更新于", None)
+        )
+        file_size = file_size_formater(
+            details_stats.get("File Size", None) or details_stats.get("文件大小", None)
+        )
 
-        images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
-        images = list(set([image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])]))
-        
+        images_tag = soup.find(
+            attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}
+        ).find_all("img")
+        images = list(
+            [
+                image_url_formater(img["src"])
+                for img in images_tag
+                if image_url_formater(img["src"])
+            ]
+        )
+        for image in (
+            soup.find(attrs={"id": "highlight_strip_bg"}).find_all("img") or []
+        ):
+            image = image_url_formater(image["src"])
+            if image:
+                images.append(image)
+
+        images = list(set(images))
         return description, created_at, updated_at, file_size, images

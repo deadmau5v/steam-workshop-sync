@@ -26,9 +26,7 @@ def get_db() -> Session:
     return Session(engine)
 
 
-def save_workshop_item(
-    item: WorkshopItem, exist_ok: bool = False
-) -> WorkshopItem:
+def save_workshop_item(item: WorkshopItem, exist_ok: bool = False) -> WorkshopItem:
     """
     保存单个 WorkshopItem 到数据库
 
@@ -41,7 +39,7 @@ def save_workshop_item(
     """
 
     db = get_db()
-    
+
     try:
         statement = select(WorkshopItem).where(WorkshopItem.id == item.id)
         existing = db.exec(statement).first()
@@ -49,12 +47,12 @@ def save_workshop_item(
         if existing:
             if not exist_ok:
                 return existing
-            
-            update_data = item.model_dump(exclude={'id', 'synced_at'})
+
+            update_data = item.model_dump(exclude={"id", "synced_at"})
             for key, value in update_data.items():
                 setattr(existing, key, value)
             existing.synced_at = datetime.utcnow()
-            
+
             db.commit()
             db.refresh(existing)
             logger.info(f"更新 WorkshopItem: {item.id} - {item.title}")
@@ -120,7 +118,7 @@ def get_workshop_item(item_id: str) -> Optional[WorkshopItem]:
 
 def init_db():
     """初始化数据库表"""
-    
+
     logger.info("初始化数据库表...")
     SQLModel.metadata.create_all(bind=engine)
     logger.info("数据库表初始化完成")

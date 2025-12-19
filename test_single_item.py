@@ -2,6 +2,7 @@
 """
 测试单个 Workshop 项目的解析和入库
 """
+
 import requests
 from parsers.workshop import WorkshopParser
 from database import save_workshop_item
@@ -41,6 +42,7 @@ def test_single_item(item_id: str):
     logger.info(f"正在解析项目信息...")
     try:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(html, "lxml")
 
         # 提取标题
@@ -48,8 +50,12 @@ def test_single_item(item_id: str):
         title = title_tag.text.strip() if title_tag else "Unknown"
 
         # 提取封面图
-        preview_tag = soup.find(attrs={"id": "previewImage"}) or soup.find(attrs={"class": "workshopItemPreviewImageMain"})
-        coverview_url = preview_tag["src"] if preview_tag and preview_tag.get("src") else ""
+        preview_tag = soup.find(attrs={"id": "previewImage"}) or soup.find(
+            attrs={"class": "workshopItemPreviewImageMain"}
+        )
+        coverview_url = (
+            preview_tag["src"] if preview_tag and preview_tag.get("src") else ""
+        )
 
         # 提取作者信息
         # 尝试多种方式查找作者信息
@@ -68,22 +74,31 @@ def test_single_item(item_id: str):
         if author == "Unknown":
             creators_block = soup.find(attrs={"class": "creatorsBlock"})
             if creators_block:
-                author_link = creators_block.find("a", attrs={"class": "friendBlockLinkOverlay"})
+                author_link = creators_block.find(
+                    "a", attrs={"class": "friendBlockLinkOverlay"}
+                )
                 if author_link:
                     author_profile = author_link["href"]
                     # 从friendBlockContent获取名称
-                    author_name_div = creators_block.find(attrs={"class": "friendBlockContent"})
+                    author_name_div = creators_block.find(
+                        attrs={"class": "friendBlockContent"}
+                    )
                     if author_name_div:
                         # 获取第一行文本（作者名）
-                        lines = [line.strip() for line in author_name_div.stripped_strings]
+                        lines = [
+                            line.strip() for line in author_name_div.stripped_strings
+                        ]
                         if lines:
                             author = lines[0]
 
         # 解析详细信息
-        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(html)
+        description, created_at, updated_at, file_size, images = (
+            WorkshopParser.parser_items_info(html)
+        )
     except Exception as e:
         logger.error(f"解析项目 {item_id} 失败: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         return None
 
@@ -117,7 +132,9 @@ def test_single_item(item_id: str):
     logger.info(f"  id: {item.id}")
     logger.info(f"  url: {item.url}")
     logger.info(f"  title: {item.title}")
-    logger.info(f"  description: {len(item.description) if item.description else 0} 字符")
+    logger.info(
+        f"  description: {len(item.description) if item.description else 0} 字符"
+    )
     logger.info(f"  created_at: {item.created_at}")
     logger.info(f"  updated_at: {item.updated_at}")
     logger.info(f"  file_size: {item.file_size}")
@@ -139,6 +156,7 @@ def test_single_item(item_id: str):
     except Exception as e:
         logger.error(f"✗ 项目保存失败: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         return None
 
@@ -146,7 +164,7 @@ def test_single_item(item_id: str):
 def main():
     """主函数"""
     # 测试失败的项目
-    test_item_id = "1926030087"
+    test_item_id = "3561709141"
 
     logger.info("=" * 60)
     logger.info(f"开始测试 Workshop 项目: {test_item_id}")

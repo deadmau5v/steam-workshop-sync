@@ -51,8 +51,7 @@ def date_formater(date_str: str | None) -> datetime | None:
 
     # 如果所有解析器都失败，抛出异常
     raise ValueError(
-        f"无法解析日期字符串: '{date_str}'\n"
-        f"支持的格式请参考 date_formater 函数文档"
+        f"无法解析日期字符串: '{date_str}'\n支持的格式请参考 date_formater 函数文档"
     )
 
 
@@ -132,14 +131,18 @@ def _parse_english_simple(date_str: str) -> datetime | None:
     match = re.match(pattern2, date_str, re.IGNORECASE)
     if match:
         day, month, time_str = match.groups()
-        return _parse_datetime(f"{current_year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+        return _parse_datetime(
+            f"{current_year} {month} {day} {time_str}", "%Y %b %d %I:%M%p"
+        )
 
     # 格式：MMM DD @ HH:MMam/pm (月在前，无年份)
     pattern3 = r"^([A-Za-z]{3})\s+(\d{1,2})\s*@\s*(\d{1,2}:\d{2}[ap]m)$"
     match = re.match(pattern3, date_str, re.IGNORECASE)
     if match:
         month, day, time_str = match.groups()
-        return _parse_datetime(f"{current_year} {month} {day} {time_str}", "%Y %b %d %I:%M%p")
+        return _parse_datetime(
+            f"{current_year} {month} {day} {time_str}", "%Y %b %d %I:%M%p"
+        )
 
     return None
 

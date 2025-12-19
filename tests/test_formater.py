@@ -260,9 +260,7 @@ class TestImageUrlFormater:
         ]
 
         for url in blocked_urls:
-            assert (
-                image_url_formater(url) is None
-            ), f"URL should be blocked: {url}"
+            assert image_url_formater(url) is None, f"URL should be blocked: {url}"
 
     def test_partial_match_not_blocked(self):
         """测试部分匹配的 URL 应该被过滤"""
