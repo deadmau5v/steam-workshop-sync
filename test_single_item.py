@@ -164,7 +164,7 @@ def test_single_item(item_id: str):
 def main():
     """主函数"""
     # 测试失败的项目
-    test_item_id = "3561709141"
+    test_item_id = "3226535413"
 
     logger.info("=" * 60)
     logger.info(f"开始测试 Workshop 项目: {test_item_id}")

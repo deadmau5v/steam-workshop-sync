@@ -125,12 +125,13 @@ class WorkshopParser:
                 if image_url_formater(img["src"])
             ]
         )
-        for image in (
-            soup.find(attrs={"id": "highlight_strip_bg"}).find_all("img") or []
-        ):
-            image = image_url_formater(image["src"])
-            if image:
-                images.append(image)
+
+        highlight_strip_bg = soup.find(attrs={"id": "highlight_strip_bg"})
+        if highlight_strip_bg:
+            for image in highlight_strip_bg.find_all("img"):
+                image = image_url_formater(image["src"])
+                if image:
+                    images.append(image)
 
         images = list(set(images))
         return description, created_at, updated_at, file_size, images
