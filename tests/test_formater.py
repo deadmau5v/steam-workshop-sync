@@ -290,7 +290,7 @@ class TestEdgeCases:
         # 普通空格
         result1 = date_formater("Dec 12 @ 7:12am")
         # 不间断空格 (U+00A0)
-        result2 = date_formater("Dec\u00a012\u00a0@\u00a07:12am")
+        date_formater("Dec\u00a012\u00a0@\u00a07:12am")
         # 两者应该产生相同的结果（如果 strip() 处理正确）
         assert result1.month == 12
         assert result1.day == 12

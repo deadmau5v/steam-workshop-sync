@@ -150,7 +150,6 @@ def _parse_chinese(date_str: str) -> datetime | None:
         - '2017 年 12 月 2 日 上午 10:37'
         - '2017 年 12 月 2 日 23:37'  # 24小时制
     """
-    original_str = date_str
     current_year = datetime.now().year
 
     # 如果没有年份，添加当前年份

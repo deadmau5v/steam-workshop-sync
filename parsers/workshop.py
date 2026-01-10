@@ -99,7 +99,7 @@ class WorkshopParser:
         file_size = file_size_formater(details_stats.get("File Size") or details_stats.get("文件大小"))
 
         images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
-        images = list([image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])])
+        images = [image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])]
 
         highlight_strip_bg = soup.find(attrs={"id": "highlight_strip_bg"})
         if highlight_strip_bg:

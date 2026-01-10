@@ -4,6 +4,7 @@ import os
 from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, engine_from_config, pool
+from sqlmodel import SQLModel
 
 # 加载环境变量
 load_dotenv()
@@ -19,9 +20,6 @@ database_url = os.getenv("STEAM_WORKSHOP_SYNC_DATABASE_URL")
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# 导入数据库模型以支持自动生成迁移
-from sqlmodel import SQLModel
 
 target_metadata = SQLModel.metadata
 

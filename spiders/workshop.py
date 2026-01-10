@@ -117,7 +117,7 @@ class Wrokshop:
         logger.info(f"开始下载 mod: {item_id}")
 
         # Steam CMD 临时下载目录（在 steamcmd 目录下）
-        steamcmd_temp_dir = os.path.join(os.path.dirname(self.steamcmd_path), "downloads")
+        steamcmd_temp_dir = os.path.abspath(os.path.join(os.path.dirname(self.steamcmd_path), "downloads"))
         Path(steamcmd_temp_dir).mkdir(parents=True, exist_ok=True)
 
         # 构建 Steam CMD 命令
@@ -148,32 +148,36 @@ class Wrokshop:
                 timeout=3600,  # 1小时超时
             )
 
+            # 检查输出中是否有下载失败的消息
+            output = result.stdout + result.stderr
+            if "ERROR!" in output or "failed" in output.lower():
+                logger.error(f"mod {item_id} 下载失败")
+                logger.debug(f"Steam CMD 输出: {result.stdout}")
+                logger.debug(f"Steam CMD 错误输出: {result.stderr}")
+                return False
+
             if result.returncode == 0:
-                logger.info(f"mod {item_id} 下载成功")
-                # 检查输出中是否包含成功标记
-                if "Success." in result.stdout or "success" in result.stdout.lower():
-                    # 移动文件到目标目录
-                    source_dir = os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "content", self.appid, item_id)
-                    target_dir = os.path.join(self.download_dir, item_id)
+                # 移动文件到目标目录
+                source_dir = os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "content", self.appid, item_id)
+                target_dir = os.path.join(self.download_dir, item_id)
 
-                    if os.path.exists(source_dir):
-                        # 如果目标目录已存在，先删除
-                        if os.path.exists(target_dir):
-                            import shutil
-
-                            shutil.rmtree(target_dir)
-                        # 移动目录
+                if os.path.exists(source_dir):
+                    # 如果目标目录已存在，先删除
+                    if os.path.exists(target_dir):
                         import shutil
 
-                        shutil.move(source_dir, target_dir)
-                        logger.info(f"mod {item_id} 已移动到: {target_dir}")
-                    else:
-                        logger.warning(f"未找到下载的 mod 文件: {source_dir}")
-                        return False
+                        shutil.rmtree(target_dir)
+                    # 移动目录
+                    import shutil
+
+                    shutil.move(source_dir, target_dir)
+                    logger.info(f"mod {item_id} 已移动到: {target_dir}")
+                    logger.info(f"mod {item_id} 下载成功")
                     return True
                 else:
-                    logger.warning(f"mod {item_id} 可能下载失败，返回码为 0 但未找到成功标记")
+                    logger.warning(f"未找到下载的 mod 文件: {source_dir}")
                     logger.debug(f"Steam CMD 输出: {result.stdout}")
+                    logger.debug(f"Steam CMD 错误输出: {result.stderr}")
                     return False
             else:
                 logger.error(f"mod {item_id} 下载失败，返回码: {result.returncode}")

@@ -35,7 +35,7 @@ def retry_on_error(
     max_retries: int = 3,
     backoff_base: float = 1.0,
     backoff_max: float = 300.0,
-    retry_on_status: dict[int, int | None] = None,
+    retry_on_status: dict | None = None,
     default_retry: bool = True,
 ):
     """
