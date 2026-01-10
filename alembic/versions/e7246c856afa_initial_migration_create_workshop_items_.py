@@ -37,15 +37,9 @@ def upgrade() -> None:
         sa.Column("synced_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_workshop_items_author"), "workshop_items", ["author"], unique=False
-    )
-    op.create_index(
-        op.f("ix_workshop_items_id"), "workshop_items", ["id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_workshop_items_title"), "workshop_items", ["title"], unique=False
-    )
+    op.create_index(op.f("ix_workshop_items_author"), "workshop_items", ["author"], unique=False)
+    op.create_index(op.f("ix_workshop_items_id"), "workshop_items", ["id"], unique=False)
+    op.create_index(op.f("ix_workshop_items_title"), "workshop_items", ["title"], unique=False)
     # ### end Alembic commands ###
 
 

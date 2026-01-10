@@ -24,9 +24,7 @@ def test_single_item(item_id: str):
     url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={item_id}"
     logger.info(f"正在获取项目信息: {url}")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     try:
         response = requests.get(url, headers=headers, timeout=30)
@@ -50,12 +48,8 @@ def test_single_item(item_id: str):
         title = title_tag.text.strip() if title_tag else "Unknown"
 
         # 提取封面图
-        preview_tag = soup.find(attrs={"id": "previewImage"}) or soup.find(
-            attrs={"class": "workshopItemPreviewImageMain"}
-        )
-        coverview_url = (
-            preview_tag["src"] if preview_tag and preview_tag.get("src") else ""
-        )
+        preview_tag = soup.find(attrs={"id": "previewImage"}) or soup.find(attrs={"class": "workshopItemPreviewImageMain"})
+        coverview_url = preview_tag["src"] if preview_tag and preview_tag.get("src") else ""
 
         # 提取作者信息
         # 尝试多种方式查找作者信息
@@ -74,27 +68,19 @@ def test_single_item(item_id: str):
         if author == "Unknown":
             creators_block = soup.find(attrs={"class": "creatorsBlock"})
             if creators_block:
-                author_link = creators_block.find(
-                    "a", attrs={"class": "friendBlockLinkOverlay"}
-                )
+                author_link = creators_block.find("a", attrs={"class": "friendBlockLinkOverlay"})
                 if author_link:
                     author_profile = author_link["href"]
                     # 从friendBlockContent获取名称
-                    author_name_div = creators_block.find(
-                        attrs={"class": "friendBlockContent"}
-                    )
+                    author_name_div = creators_block.find(attrs={"class": "friendBlockContent"})
                     if author_name_div:
                         # 获取第一行文本（作者名）
-                        lines = [
-                            line.strip() for line in author_name_div.stripped_strings
-                        ]
+                        lines = [line.strip() for line in author_name_div.stripped_strings]
                         if lines:
                             author = lines[0]
 
         # 解析详细信息
-        description, created_at, updated_at, file_size, images = (
-            WorkshopParser.parser_items_info(html)
-        )
+        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(html)
     except Exception as e:
         logger.error(f"解析项目 {item_id} 失败: {e}")
         import traceback
@@ -132,9 +118,7 @@ def test_single_item(item_id: str):
     logger.info(f"  id: {item.id}")
     logger.info(f"  url: {item.url}")
     logger.info(f"  title: {item.title}")
-    logger.info(
-        f"  description: {len(item.description) if item.description else 0} 字符"
-    )
+    logger.info(f"  description: {len(item.description) if item.description else 0} 字符")
     logger.info(f"  created_at: {item.created_at}")
     logger.info(f"  updated_at: {item.updated_at}")
     logger.info(f"  file_size: {item.file_size}")

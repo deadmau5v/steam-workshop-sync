@@ -2,7 +2,6 @@
 """测试下载 Workshop mod"""
 
 from dotenv import load_dotenv
-
 from spiders.workshop import Wrokshop
 
 load_dotenv()

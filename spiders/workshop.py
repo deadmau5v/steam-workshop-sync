@@ -18,15 +18,11 @@ class Wrokshop:
     def __init__(self) -> None:
         self.appid = os.environ.get("STEAM_WORKSHOP_SYNC_APP_ID", "").strip()
         if not self.appid:
-            raise EnvironmentError(
-                "没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）"
-            )
+            raise EnvironmentError("没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）")
 
         self.timeout = int(os.environ.get("STEAM_WORKSHOP_SYNC_TIMEOUT", 30))
         # 请求之间的基础延迟（秒）
-        self.request_delay = float(
-            os.environ.get("STEAM_WORKSHOP_SYNC_REQUEST_DELAY", 1.0)
-        )
+        self.request_delay = float(os.environ.get("STEAM_WORKSHOP_SYNC_REQUEST_DELAY", 1.0))
 
         # Steam CMD 配置
         self.steamcmd_path = os.environ.get("STEAM_WORKSHOP_SYNC_STEAMCMD_PATH", "steamcmd")
@@ -77,9 +73,7 @@ class Wrokshop:
         url = "https://steamcommunity.com/workshop/browse/"
 
         logger.info(f"正在请求第 {page} 页: {url}")
-        response = self._do_request(
-            url, params=params, headers=self.headers, timeout=self.timeout
-        )
+        response = self._do_request(url, params=params, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
         end_time = datetime.now()
@@ -97,9 +91,7 @@ class Wrokshop:
         response = self._do_request(url, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
-        description, created_at, updated_at, file_size, images = (
-            WorkshopParser.parser_items_info(response.text)
-        )
+        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(response.text)
         item_data = item.model_dump()
         item_data.update(
             {
@@ -132,8 +124,10 @@ class Wrokshop:
         # 构建 Steam CMD 命令
         cmd = [
             self.steamcmd_path,
-            "+force_install_dir", steamcmd_temp_dir,
-            "+login", self.steam_username,
+            "+force_install_dir",
+            steamcmd_temp_dir,
+            "+login",
+            self.steam_username,
         ]
 
         # 如果有密码，添加密码
@@ -144,11 +138,7 @@ class Wrokshop:
                 cmd.append(self.steam_guard_code)
 
         # 添加下载命令
-        cmd.extend([
-            "+workshop_download_item", self.appid, item_id,
-            "validate",
-            "+quit"
-        ])
+        cmd.extend(["+workshop_download_item", self.appid, item_id, "validate", "+quit"])
 
         try:
             logger.info(f"执行 Steam CMD 命令: {' '.join(cmd)}")
@@ -171,9 +161,11 @@ class Wrokshop:
                         # 如果目标目录已存在，先删除
                         if os.path.exists(target_dir):
                             import shutil
+
                             shutil.rmtree(target_dir)
                         # 移动目录
                         import shutil
+
                         shutil.move(source_dir, target_dir)
                         logger.info(f"mod {item_id} 已移动到: {target_dir}")
                     else:

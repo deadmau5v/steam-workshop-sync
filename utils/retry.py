@@ -11,18 +11,14 @@ def _calculate_wait_time(retry_count: int, base: float, maximum: float) -> float
     return min(base * (2 ** (retry_count - 1)), maximum)
 
 
-def _should_retry_status(
-    status_code: int, retry_config: dict, default_retry: bool
-) -> bool:
+def _should_retry_status(status_code: int, retry_config: dict, default_retry: bool) -> bool:
     """判断状态码是否需要重试"""
     if status_code in retry_config:
         return True
     return default_retry and status_code >= 400
 
 
-def _get_max_retry_for_status(
-    status_code: int, retry_config: dict, default_max: int
-) -> int | None:
+def _get_max_retry_for_status(status_code: int, retry_config: dict, default_max: int) -> int | None:
     """获取状态码对应的最大重试次数"""
     return retry_config.get(status_code, default_max)
 
@@ -30,9 +26,7 @@ def _get_max_retry_for_status(
 def _log_retry(error_key: str, current: int, maximum: int | None, wait: float):
     """记录重试日志"""
     max_str = "" if maximum is None else f"/{maximum}"
-    logger.warning(
-        f"{error_key} 错误，第 {current} 次重试{max_str}，等待 {wait:.1f} 秒..."
-    )
+    logger.warning(f"{error_key} 错误，第 {current} 次重试{max_str}，等待 {wait:.1f} 秒...")
 
 
 def retry_on_error(
@@ -78,9 +72,7 @@ def retry_on_error(
                     status_code = result.status_code
 
                     # 不需要重试，直接返回
-                    if not _should_retry_status(
-                        status_code, retry_config, default_retry
-                    ):
+                    if not _should_retry_status(status_code, retry_config, default_retry):
                         return result
 
                     # 初始化并递增重试计数
@@ -88,27 +80,19 @@ def retry_on_error(
                     current_retry = retry_counts[status_code]
 
                     # 获取最大重试次数
-                    max_retry = _get_max_retry_for_status(
-                        status_code, retry_config, max_retries
-                    )
+                    max_retry = _get_max_retry_for_status(status_code, retry_config, max_retries)
 
                     # 超过最大重试次数
                     if max_retry is not None and current_retry > max_retry:
                         return result
 
                     # 等待并重试
-                    wait_time = _calculate_wait_time(
-                        current_retry, backoff_base, backoff_max
-                    )
-                    _log_retry(
-                        f"HTTP {status_code}", current_retry, max_retry, wait_time
-                    )
+                    wait_time = _calculate_wait_time(current_retry, backoff_base, backoff_max)
+                    _log_retry(f"HTTP {status_code}", current_retry, max_retry, wait_time)
                     time.sleep(wait_time)
 
                 except Exception as e:
-                    if not _handle_exception(
-                        e, retry_counts, retry_config, backoff_base, backoff_max
-                    ):
+                    if not _handle_exception(e, retry_counts, retry_config, backoff_base, backoff_max):
                         raise
 
         return wrapper
@@ -147,9 +131,7 @@ def _handle_exception(
 
         # 等待并重试
         wait_time = _calculate_wait_time(current_retry, backoff_base, backoff_max)
-        _log_retry(
-            f"{error_type} (HTTP {status_code})", current_retry, max_retry, wait_time
-        )
+        _log_retry(f"{error_type} (HTTP {status_code})", current_retry, max_retry, wait_time)
         time.sleep(wait_time)
         return True
 

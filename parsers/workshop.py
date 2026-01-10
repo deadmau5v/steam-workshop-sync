@@ -16,9 +16,7 @@ class WorkshopParser:
         解析创意工坊项目卡片
         """
         soup = BeautifulSoup(html, "lxml").find(attrs={"class": "workshopBrowseItems"})
-        pagination_html = BeautifulSoup(html, "lxml").find(
-            attrs={"class": "workshopBrowsePaging"}
-        )
+        pagination_html = BeautifulSoup(html, "lxml").find(attrs={"class": "workshopBrowsePaging"})
 
         items_tag = soup.find_all(attrs={"class": "workshopItem"})
         pagination = WorkshopParser.parser_pagination(pagination_html)
@@ -66,10 +64,7 @@ class WorkshopParser:
     @staticmethod
     def parser_pagination(paging_soup) -> Pagination:
         controls = paging_soup.find(attrs={"class": "workshopBrowsePagingControls"})
-        page_links = [
-            a.get_text(strip=True)
-            for a in controls.find_all(attrs={"class": "pagelink"})
-        ]
+        page_links = [a.get_text(strip=True) for a in controls.find_all(attrs={"class": "pagelink"})]
         current_page = int(page_links[0])
 
         total_pages = int(page_links[-1])
@@ -84,20 +79,14 @@ class WorkshopParser:
         soup = BeautifulSoup(html, "lxml")
 
         h = html2text.HTML2Text()
-        description = h.handle(
-            soup.find(attrs={"class": "workshopItemDescription"}).prettify()
-        ).strip()
+        description = h.handle(soup.find(attrs={"class": "workshopItemDescription"}).prettify()).strip()
 
-        responsive_local_menu = soup.find(
-            attrs={"class": "workshopItemPreviewArea"}
-        ).find(attrs={"class": "responsive_local_menu"})
+        responsive_local_menu = soup.find(attrs={"class": "workshopItemPreviewArea"}).find(
+            attrs={"class": "responsive_local_menu"}
+        )
 
-        details_stats_keys = responsive_local_menu.find_all(
-            attrs={"class": "detailsStatLeft"}
-        )
-        details_stats_values = responsive_local_menu.find_all(
-            attrs={"class": "detailsStatRight"}
-        )
+        details_stats_keys = responsive_local_menu.find_all(attrs={"class": "detailsStatLeft"})
+        details_stats_values = responsive_local_menu.find_all(attrs={"class": "detailsStatRight"})
 
         details_stats_keys = [key.text.strip() for key in details_stats_keys]
         details_stats_values = [value.text.strip() for value in details_stats_values]
@@ -105,26 +94,12 @@ class WorkshopParser:
 
         logger.debug(f"MetaData: {details_stats}")
 
-        created_at = date_formater(
-            details_stats.get("Posted", None) or details_stats.get("发表于", None)
-        )
-        updated_at = date_formater(
-            details_stats.get("Updated", None) or details_stats.get("更新于", None)
-        )
-        file_size = file_size_formater(
-            details_stats.get("File Size", None) or details_stats.get("文件大小", None)
-        )
+        created_at = date_formater(details_stats.get("Posted", None) or details_stats.get("发表于", None))
+        updated_at = date_formater(details_stats.get("Updated", None) or details_stats.get("更新于", None))
+        file_size = file_size_formater(details_stats.get("File Size", None) or details_stats.get("文件大小", None))
 
-        images_tag = soup.find(
-            attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}
-        ).find_all("img")
-        images = list(
-            [
-                image_url_formater(img["src"])
-                for img in images_tag
-                if image_url_formater(img["src"])
-            ]
-        )
+        images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
+        images = list([image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])])
 
         highlight_strip_bg = soup.find(attrs={"id": "highlight_strip_bg"})
         if highlight_strip_bg:

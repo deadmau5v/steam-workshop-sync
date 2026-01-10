@@ -14,9 +14,7 @@ logger = get_logger(__name__)
 
 # 配置参数
 PAGE_DELAY = float(os.getenv("STEAM_WORKSHOP_SYNC_PAGE_DELAY", 5.0))  # 页面间延迟（秒）
-CYCLE_DELAY = float(
-    os.getenv("STEAM_WORKSHOP_SYNC_CYCLE_DELAY", 60.0)
-)  # 循环间延迟（秒）
+CYCLE_DELAY = float(os.getenv("STEAM_WORKSHOP_SYNC_CYCLE_DELAY", 60.0))  # 循环间延迟（秒）
 
 
 def process_page(workshop: Wrokshop, page: int) -> tuple[int, int]:
@@ -35,10 +33,7 @@ def process_page(workshop: Wrokshop, page: int) -> tuple[int, int]:
         pagination: Pagination = result["pagination"]
         items: list[WorkshopItem] = result["items"]
 
-        logger.info(
-            f"📄 第 {pagination.current_page}/{pagination.total_pages} 页 "
-            f"- 找到 {pagination.items_count} 个项目"
-        )
+        logger.info(f"📄 第 {pagination.current_page}/{pagination.total_pages} 页 - 找到 {pagination.items_count} 个项目")
 
         processed_count = 0
         for idx, item in enumerate(items, 1):
@@ -52,9 +47,7 @@ def process_page(workshop: Wrokshop, page: int) -> tuple[int, int]:
                 logger.error(f"  处理项目 {item.id} 失败: {e}")
                 continue
 
-        logger.info(
-            f"✅ 第 {page} 页处理完成，成功: {processed_count}/{pagination.items_count}"
-        )
+        logger.info(f"✅ 第 {page} 页处理完成，成功: {processed_count}/{pagination.items_count}")
         return pagination.total_pages, processed_count
 
     except Exception as e:
@@ -78,9 +71,7 @@ def main():
         cycle_start_time = datetime.now()
 
         logger.info(f"\n{'=' * 60}")
-        logger.info(
-            f"🔄 开始第 {cycle_count} 轮监控 - {cycle_start_time.strftime('%Y-%m-%d %H:%M:%S')}"
-        )
+        logger.info(f"🔄 开始第 {cycle_count} 轮监控 - {cycle_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info(f"{'=' * 60}")
 
         try:
