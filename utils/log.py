@@ -1,6 +1,5 @@
 import logging
 
-
 handler = logging.StreamHandler()
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter("[%(levelname)s] %(message)s")

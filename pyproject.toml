@@ -1,9 +1,9 @@
 [project]
 name = "steam-workshop-sync"
 version = "0.1.0"
-description = "Add your description here"
+description = "Steam Sync"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.14.0",
     "bs4>=0.0.2",
@@ -18,3 +18,6 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "sqlmodel>=0.0.22",
 ]
+
+[tool.setuptools]
+packages = ["models", "parsers", "spiders", "alembic"]

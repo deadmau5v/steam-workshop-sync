@@ -1,13 +1,12 @@
-import os
-import time
-import subprocess
 from datetime import datetime
+import os
 from pathlib import Path
-
-import requests
+import subprocess
+import time
 
 from models.workshop import WorkshopItem
 from parsers.workshop import WorkshopParser
+import requests
 from utils.log import get_logger
 from utils.retry import retry_on_error
 
@@ -18,7 +17,7 @@ class Wrokshop:
     def __init__(self) -> None:
         self.appid = os.environ.get("STEAM_WORKSHOP_SYNC_APP_ID", "").strip()
         if not self.appid:
-            raise EnvironmentError("没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）")
+            raise OSError("没有设置 STEAM_WORKSHOP_SYNC_APP_ID（Steam Workshop APP ID）")
 
         self.timeout = int(os.environ.get("STEAM_WORKSHOP_SYNC_TIMEOUT", 30))
         # 请求之间的基础延迟（秒）

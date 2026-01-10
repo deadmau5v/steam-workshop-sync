@@ -1,9 +1,8 @@
-from typing import Optional
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlmodel import SQLModel, Field, Column
 from sqlalchemy import ARRAY, String
+from sqlmodel import Column, Field, SQLModel
 
 
 class Pagination(BaseModel):
@@ -23,13 +22,13 @@ class WorkshopItem(SQLModel, table=True):
     coverview_url: str
     author: str = Field(index=True)
     author_profile: str
-    rating: Optional[int] = None
-    description: Optional[str] = None
+    rating: int | None = None
+    description: str | None = None
     file_size: int = Field(default=0)
     images: list[str] = Field(sa_column=Column(ARRAY(String)))
 
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     synced_at: datetime = Field(default_factory=datetime.utcnow)
 
     def __repr__(self) -> str:

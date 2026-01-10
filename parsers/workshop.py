@@ -1,8 +1,8 @@
-from bs4 import BeautifulSoup
-import html2text
 import re
 
-from models.workshop import WorkshopItem, Pagination
+from bs4 import BeautifulSoup
+import html2text
+from models.workshop import Pagination, WorkshopItem
 from utils.formater import date_formater, file_size_formater, image_url_formater
 from utils.log import get_logger
 
@@ -90,13 +90,13 @@ class WorkshopParser:
 
         details_stats_keys = [key.text.strip() for key in details_stats_keys]
         details_stats_values = [value.text.strip() for value in details_stats_values]
-        details_stats = dict(zip(details_stats_keys, details_stats_values))
+        details_stats = dict(zip(details_stats_keys, details_stats_values, strict=False))
 
         logger.debug(f"MetaData: {details_stats}")
 
-        created_at = date_formater(details_stats.get("Posted", None) or details_stats.get("发表于", None))
-        updated_at = date_formater(details_stats.get("Updated", None) or details_stats.get("更新于", None))
-        file_size = file_size_formater(details_stats.get("File Size", None) or details_stats.get("文件大小", None))
+        created_at = date_formater(details_stats.get("Posted") or details_stats.get("发表于"))
+        updated_at = date_formater(details_stats.get("Updated") or details_stats.get("更新于"))
+        file_size = file_size_formater(details_stats.get("File Size") or details_stats.get("文件大小"))
 
         images_tag = soup.find(attrs={"class": "workshopItemPreviewImageEnlargeableContainer"}).find_all("img")
         images = list([image_url_formater(img["src"]) for img in images_tag if image_url_formater(img["src"])])

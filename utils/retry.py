@@ -1,6 +1,8 @@
-import time
+from collections.abc import Callable
 import functools
-from typing import Callable, Any
+import time
+from typing import Any
+
 from utils.log import get_logger
 
 logger = get_logger(__name__)

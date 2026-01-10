@@ -3,14 +3,12 @@
 测试单个 Workshop 项目的解析和入库
 """
 
-import requests
-from parsers.workshop import WorkshopParser
+
 from database import save_workshop_item
 from models.workshop import WorkshopItem
-from utils.formater import date_formater
-import logging
+from parsers.workshop import WorkshopParser
+import requests
 from utils.log import get_logger
-import time
 
 # 创建 logger
 logger = get_logger(__name__)
@@ -37,7 +35,7 @@ def test_single_item(item_id: str):
     logger.info(f"成功获取 HTML，长度: {len(html)} 字符")
 
     # 2. 解析项目信息
-    logger.info(f"正在解析项目信息...")
+    logger.info("正在解析项目信息...")
     try:
         from bs4 import BeautifulSoup
 
@@ -88,7 +86,7 @@ def test_single_item(item_id: str):
         logger.error(traceback.format_exc())
         return None
 
-    logger.info(f"成功解析项目信息:")
+    logger.info("成功解析项目信息:")
     logger.info(f"  标题: {title}")
     logger.info(f"  作者: {author}")
     logger.info(f"  封面 URL: {coverview_url}")
@@ -99,7 +97,7 @@ def test_single_item(item_id: str):
     logger.info(f"  图片数量: {len(images) if images else 0}")
 
     # 3. 构建完整的项目数据
-    logger.info(f"\n--- 构建项目数据 ---")
+    logger.info("\n--- 构建项目数据 ---")
     item = WorkshopItem(
         id=item_id,
         url=url,
@@ -114,7 +112,7 @@ def test_single_item(item_id: str):
         images=images or [],
     )
 
-    logger.info(f"完整项目数据:")
+    logger.info("完整项目数据:")
     logger.info(f"  id: {item.id}")
     logger.info(f"  url: {item.url}")
     logger.info(f"  title: {item.title}")
@@ -124,18 +122,18 @@ def test_single_item(item_id: str):
     logger.info(f"  file_size: {item.file_size}")
 
     # 4. 测试入库
-    logger.info(f"\n--- 测试数据入库 ---")
+    logger.info("\n--- 测试数据入库 ---")
     try:
         result = save_workshop_item(item, exist_ok=True)
         if result:
-            logger.info(f"✓ 项目保存成功")
+            logger.info("✓ 项目保存成功")
             logger.info(f"  数据库 ID: {result.id}")
             logger.info(f"  创建时间: {result.created_at}")
             logger.info(f"  更新时间: {result.updated_at}")
             logger.info(f"  同步时间: {result.synced_at}")
             return result
         else:
-            logger.error(f"✗ 项目保存失败: 返回 None")
+            logger.error("✗ 项目保存失败: 返回 None")
             return None
     except Exception as e:
         logger.error(f"✗ 项目保存失败: {e}")

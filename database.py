@@ -1,11 +1,9 @@
-import os
 from datetime import datetime
-from typing import Optional, List
+import os
 
-from sqlmodel import create_engine, Session, select, SQLModel
 from dotenv import load_dotenv
-
 from models.workshop import WorkshopItem
+from sqlmodel import Session, SQLModel, create_engine, select
 from utils.log import get_logger
 
 load_dotenv()
@@ -74,7 +72,7 @@ def save_workshop_item(item: WorkshopItem, exist_ok: bool = False) -> WorkshopIt
         db.close()
 
 
-def save_workshop_items(items: List[WorkshopItem]) -> int:
+def save_workshop_items(items: list[WorkshopItem]) -> int:
     """
     批量保存 WorkshopItem 到数据库
 
@@ -98,7 +96,7 @@ def save_workshop_items(items: List[WorkshopItem]) -> int:
     return saved_count
 
 
-def get_workshop_item(item_id: str) -> Optional[WorkshopItem]:
+def get_workshop_item(item_id: str) -> WorkshopItem | None:
     """
     根据 ID 获取 WorkshopItem
 

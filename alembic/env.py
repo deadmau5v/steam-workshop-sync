@@ -1,11 +1,9 @@
-import os
 from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool, create_engine
+import os
 
 from alembic import context
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, engine_from_config, pool
 
 # 加载环境变量
 load_dotenv()
@@ -24,7 +22,6 @@ if config.config_file_name is not None:
 
 # 导入数据库模型以支持自动生成迁移
 from sqlmodel import SQLModel
-from models.workshop import WorkshopItem
 
 target_metadata = SQLModel.metadata
 

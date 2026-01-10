@@ -1,12 +1,12 @@
+from datetime import datetime
 import os
 import time
-from datetime import datetime
-from dotenv import load_dotenv
 
+from database import save_workshop_item
+from dotenv import load_dotenv
 from models.workshop import Pagination, WorkshopItem
 from spiders.workshop import Wrokshop
 from utils.log import get_logger
-from database import save_workshop_item
 
 load_dotenv()
 
@@ -80,7 +80,7 @@ def main():
 
             # 如果只有一页，直接进入下一轮
             if total_pages == 1:
-                logger.info(f"✅ 本轮监控完成（共 1 页）")
+                logger.info("✅ 本轮监控完成（共 1 页）")
             else:
                 # 处理剩余页面
                 time.sleep(PAGE_DELAY)
