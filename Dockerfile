@@ -8,7 +8,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     postgresql-client \
+    lib32gcc-s1 \
     && rm -rf /var/lib/apt/lists/*
+
+# 安装 Steam CMD
+RUN mkdir -p /steamcmd && \
+    curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf - -C /steamcmd && \
+    chmod +x /steamcmd/steamcmd.sh
+
+# 创建下载目录
+RUN mkdir -p /app/downloads
 
 # 安装 uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -16,7 +25,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # 设置环境变量
 ENV UV_SYSTEM_PYTHON=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    STEAM_WORKSHOP_SYNC_STEAMCMD_PATH="/steamcmd/steamcmd.sh" \
+    STEAM_WORKSHOP_SYNC_DOWNLOAD_DIR="/app/downloads"
 
 # 复制项目文件（优化层缓存）
 COPY pyproject.toml uv.lock ./
@@ -29,7 +40,7 @@ COPY . .
 
 # 创建非 root 用户
 RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app /steamcmd
 
 # 切换到非 root 用户
 USER appuser

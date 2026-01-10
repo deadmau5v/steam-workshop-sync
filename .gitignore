@@ -18,6 +18,10 @@ data/
 *.db
 *.sqlite
 
+# Steam Workshop downloads
+downloads/
+steamcmd/
+
 # Environment variables
 .env
 .env.*
