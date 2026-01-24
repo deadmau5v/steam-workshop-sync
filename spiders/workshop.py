@@ -90,17 +90,44 @@ class Wrokshop:
         response = self._do_request(url, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
-        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(response.text)
+        (
+            description,
+            created_at,
+            updated_at,
+            file_size,
+            images,
+            meta_data,
+            author_profile,
+            title,
+            author_name,
+        ) = WorkshopParser.parser_items_info(response.text)
         item_data = item.model_dump()
-        item_data.update(
-            {
-                "description": description,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "file_size": file_size,
-                "images": images,
-            }
-        )
+
+        # 构建更新字段
+        update_fields = {
+            "description": description,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "file_size": file_size,
+            "images": images,
+            "meta_data": meta_data,
+        }
+
+        # 更新标题
+        if title:
+            update_fields["title"] = title
+
+        # 更新作者
+        if author_name:
+            update_fields["author"] = author_name
+
+        # 更新作者链接
+        if author_profile:
+            update_fields["author_profile"] = author_profile
+
+        # 注意：不更新 coverview_url，保留列表页的封面图
+
+        item_data.update(update_fields)
         return WorkshopItem.model_validate(item_data)
 
     def download_mod(self, item_id: str) -> bool:
@@ -148,40 +175,45 @@ class Wrokshop:
                 timeout=3600,  # 1小时超时
             )
 
-            # 检查输出中是否有下载失败的消息
-            output = result.stdout + result.stderr
-            if "ERROR!" in output or "failed" in output.lower():
-                logger.error(f"mod {item_id} 下载失败")
-                logger.debug(f"Steam CMD 输出: {result.stdout}")
-                logger.debug(f"Steam CMD 错误输出: {result.stderr}")
-                return False
+            # SteamCMD 在不同平台可能将文件下载到不同的目录
+            # Linux/Windows: steamapps/workshop/content/{appid}/{item_id}/
+            # macOS: steamapps/workshop/downloads/{appid}/{item_id}/
+            possible_source_dirs = [
+                os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "content", self.appid, item_id),
+                os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "downloads", self.appid, item_id),
+            ]
 
-            if result.returncode == 0:
-                # 移动文件到目标目录
-                source_dir = os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "content", self.appid, item_id)
+            source_dir = None
+            for possible_dir in possible_source_dirs:
+                if os.path.exists(possible_dir):
+                    source_dir = possible_dir
+                    break
+
+            if source_dir:
                 target_dir = os.path.join(self.download_dir, item_id)
-
-                if os.path.exists(source_dir):
-                    # 如果目标目录已存在，先删除
-                    if os.path.exists(target_dir):
-                        import shutil
-
-                        shutil.rmtree(target_dir)
-                    # 移动目录
+                # 如果目标目录已存在，先删除
+                if os.path.exists(target_dir):
                     import shutil
 
-                    shutil.move(source_dir, target_dir)
-                    logger.info(f"mod {item_id} 已移动到: {target_dir}")
-                    logger.info(f"mod {item_id} 下载成功")
-                    return True
-                else:
-                    logger.warning(f"未找到下载的 mod 文件: {source_dir}")
+                    shutil.rmtree(target_dir)
+                # 移动目录
+                import shutil
+
+                shutil.move(source_dir, target_dir)
+                logger.info(f"mod {item_id} 已移动到: {target_dir}")
+                logger.info(f"mod {item_id} 下载成功")
+                return True
+            else:
+                # 只有在文件不存在时才检查错误消息
+                output = result.stdout + result.stderr
+                if "ERROR!" in output or "failed" in output.lower():
+                    logger.error(f"mod {item_id} 下载失败")
                     logger.debug(f"Steam CMD 输出: {result.stdout}")
                     logger.debug(f"Steam CMD 错误输出: {result.stderr}")
-                    return False
-            else:
-                logger.error(f"mod {item_id} 下载失败，返回码: {result.returncode}")
-                logger.error(f"错误输出: {result.stderr}")
+                else:
+                    logger.warning(f"未找到下载的 mod 文件，尝试的路径: {possible_source_dirs}")
+                    logger.debug(f"Steam CMD 输出: {result.stdout}")
+                    logger.debug(f"Steam CMD 错误输出: {result.stderr}")
                 return False
 
         except subprocess.TimeoutExpired:
