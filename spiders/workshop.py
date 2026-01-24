@@ -90,17 +90,44 @@ class Wrokshop:
         response = self._do_request(url, headers=self.headers, timeout=self.timeout)
         response.encoding = response.apparent_encoding
 
-        description, created_at, updated_at, file_size, images = WorkshopParser.parser_items_info(response.text)
+        (
+            description,
+            created_at,
+            updated_at,
+            file_size,
+            images,
+            meta_data,
+            author_profile,
+            title,
+            author_name,
+        ) = WorkshopParser.parser_items_info(response.text)
         item_data = item.model_dump()
-        item_data.update(
-            {
-                "description": description,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "file_size": file_size,
-                "images": images,
-            }
-        )
+
+        # 构建更新字段
+        update_fields = {
+            "description": description,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "file_size": file_size,
+            "images": images,
+            "meta_data": meta_data,
+        }
+
+        # 更新标题
+        if title:
+            update_fields["title"] = title
+
+        # 更新作者
+        if author_name:
+            update_fields["author"] = author_name
+
+        # 更新作者链接
+        if author_profile:
+            update_fields["author_profile"] = author_profile
+
+        # 注意：不更新 coverview_url，保留列表页的封面图
+
+        item_data.update(update_fields)
         return WorkshopItem.model_validate(item_data)
 
     def download_mod(self, item_id: str) -> bool:
