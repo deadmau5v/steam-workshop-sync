@@ -132,7 +132,7 @@ class Wrokshop:
 
     def download_mod(self, item_id: str) -> bool:
         """
-        使用 Steam CMD 下载 Workshop mod
+        使用 Steam CMD 下载 Workshop mod（带 Rate Limit 重试机制）
 
         Args:
             item_id: Workshop item ID
@@ -141,90 +141,104 @@ class Wrokshop:
             bool: 下载是否成功
         """
         item_id = item_id.strip()
-        logger.info(f"开始下载 mod: {item_id}")
+        max_retries = 3
+        retry_delay = 60  # 初始重试延迟 60 秒
 
-        # Steam CMD 临时下载目录（在 steamcmd 目录下）
-        steamcmd_temp_dir = os.path.abspath(os.path.join(os.path.dirname(self.steamcmd_path), "downloads"))
-        Path(steamcmd_temp_dir).mkdir(parents=True, exist_ok=True)
+        for attempt in range(max_retries):
+            logger.info(f"开始下载 mod: {item_id} (尝试 {attempt + 1}/{max_retries})")
 
-        # 构建 Steam CMD 命令
-        cmd = [
-            self.steamcmd_path,
-            "+force_install_dir",
-            steamcmd_temp_dir,
-            "+login",
-            self.steam_username,
-        ]
+            # Steam CMD 临时下载目录（在 steamcmd 目录下）
+            steamcmd_temp_dir = os.path.abspath(os.path.join(os.path.dirname(self.steamcmd_path), "downloads"))
+            Path(steamcmd_temp_dir).mkdir(parents=True, exist_ok=True)
 
-        # 如果有密码，添加密码
-        if self.steam_password:
-            cmd.append(self.steam_password)
-            # 如果有 Steam Guard 代码，添加代码
-            if self.steam_guard_code:
-                cmd.append(self.steam_guard_code)
-
-        # 添加下载命令
-        cmd.extend(["+workshop_download_item", self.appid, item_id, "validate", "+quit"])
-
-        try:
-            logger.info(f"执行 Steam CMD 命令: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=3600,  # 1小时超时
-            )
-
-            # SteamCMD 在不同平台可能将文件下载到不同的目录
-            # Linux/Windows: steamapps/workshop/content/{appid}/{item_id}/
-            # macOS: steamapps/workshop/downloads/{appid}/{item_id}/
-            possible_source_dirs = [
-                os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "content", self.appid, item_id),
-                os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "downloads", self.appid, item_id),
+            # 构建 Steam CMD 命令
+            cmd = [
+                self.steamcmd_path,
+                "+force_install_dir",
+                steamcmd_temp_dir,
+                "+login",
+                self.steam_username,
             ]
 
-            source_dir = None
-            for possible_dir in possible_source_dirs:
-                if os.path.exists(possible_dir):
-                    source_dir = possible_dir
-                    break
+            # 如果有密码，添加密码
+            if self.steam_password:
+                cmd.append(self.steam_password)
+                # 如果有 Steam Guard 代码，添加代码
+                if self.steam_guard_code:
+                    cmd.append(self.steam_guard_code)
 
-            if source_dir:
-                target_dir = os.path.join(self.download_dir, item_id)
-                # 如果目标目录已存在，先删除
-                if os.path.exists(target_dir):
+            # 添加下载命令
+            cmd.extend(["+workshop_download_item", self.appid, item_id, "validate", "+quit"])
+
+            try:
+                logger.info(f"执行 Steam CMD 命令: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=3600,  # 1小时超时
+                )
+
+                # 检查是否是 Rate Limit 错误
+                output = result.stdout + result.stderr
+                if "Rate Limit" in output or "rate limit" in output.lower():
+                    logger.warning(f"检测到 Rate Limit 错误，等待 {retry_delay} 秒后重试...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # 指数退避
+                    continue
+
+                # SteamCMD 在不同平台可能将文件下载到不同的目录
+                # Linux/Windows: steamapps/workshop/content/{appid}/{item_id}/
+                # macOS: steamapps/workshop/downloads/{appid}/{item_id}/
+                possible_source_dirs = [
+                    os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "content", self.appid, item_id),
+                    os.path.join(steamcmd_temp_dir, "steamapps", "workshop", "downloads", self.appid, item_id),
+                ]
+
+                source_dir = None
+                for possible_dir in possible_source_dirs:
+                    if os.path.exists(possible_dir):
+                        source_dir = possible_dir
+                        break
+
+                if source_dir:
+                    target_dir = os.path.join(self.download_dir, item_id)
+                    # 如果目标目录已存在，先删除
+                    if os.path.exists(target_dir):
+                        import shutil
+
+                        shutil.rmtree(target_dir)
+                    # 移动目录
                     import shutil
 
-                    shutil.rmtree(target_dir)
-                # 移动目录
-                import shutil
-
-                shutil.move(source_dir, target_dir)
-                logger.info(f"mod {item_id} 已移动到: {target_dir}")
-                logger.info(f"mod {item_id} 下载成功")
-                return True
-            else:
-                # 只有在文件不存在时才检查错误消息
-                output = result.stdout + result.stderr
-                if "ERROR!" in output or "failed" in output.lower():
-                    logger.error(f"mod {item_id} 下载失败")
-                    logger.debug(f"Steam CMD 输出: {result.stdout}")
-                    logger.debug(f"Steam CMD 错误输出: {result.stderr}")
+                    shutil.move(source_dir, target_dir)
+                    logger.info(f"mod {item_id} 已移动到: {target_dir}")
+                    logger.info(f"mod {item_id} 下载成功")
+                    return True
                 else:
-                    logger.warning(f"未找到下载的 mod 文件，尝试的路径: {possible_source_dirs}")
-                    logger.debug(f"Steam CMD 输出: {result.stdout}")
-                    logger.debug(f"Steam CMD 错误输出: {result.stderr}")
+                    # 只有在文件不存在时才检查错误消息
+                    if "ERROR!" in output or "failed" in output.lower():
+                        logger.error(f"mod {item_id} 下载失败")
+                        logger.debug(f"Steam CMD 输出: {result.stdout}")
+                        logger.debug(f"Steam CMD 错误输出: {result.stderr}")
+                    else:
+                        logger.warning(f"未找到下载的 mod 文件，尝试的路径: {possible_source_dirs}")
+                        logger.debug(f"Steam CMD 输出: {result.stdout}")
+                        logger.debug(f"Steam CMD 错误输出: {result.stderr}")
+                    return False
+
+            except subprocess.TimeoutExpired:
+                logger.error(f"mod {item_id} 下载超时")
+                return False
+            except FileNotFoundError:
+                logger.error(f"未找到 Steam CMD，请检查路径: {self.steamcmd_path}")
+                return False
+            except Exception as e:
+                logger.error(f"mod {item_id} 下载时发生异常: {e}")
                 return False
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"mod {item_id} 下载超时")
-            return False
-        except FileNotFoundError:
-            logger.error(f"未找到 Steam CMD，请检查路径: {self.steamcmd_path}")
-            return False
-        except Exception as e:
-            logger.error(f"mod {item_id} 下载时发生异常: {e}")
-            return False
+        logger.error(f"mod {item_id} 下载失败，已达到最大重试次数 {max_retries}")
+        return False
 
     def download_mods(self, item_ids: list[str]) -> dict[str, bool]:
         """
