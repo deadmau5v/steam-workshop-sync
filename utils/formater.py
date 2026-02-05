@@ -7,7 +7,8 @@ def date_formater(date_str: str | None) -> datetime | None:
     if not date_str:
         return None
 
-    date_str = date_str.strip()
+    # strip() will remove most whitespace but not all Unicode space categories
+    date_str = "".join(date_str.split())
     if not date_str:
         return None
 
