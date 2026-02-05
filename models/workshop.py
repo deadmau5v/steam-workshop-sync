@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, field_serializer
 from sqlalchemy import ARRAY, JSON, String
 from sqlmodel import Column, Field, SQLModel
 
@@ -17,7 +17,6 @@ class WorkshopItem(SQLModel, table=True):
     """Workshop Item model"""
 
     __tablename__ = "workshop_items"  # type: ignore[assignment]
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     id: str = Field(primary_key=True, index=True)
     url: str
