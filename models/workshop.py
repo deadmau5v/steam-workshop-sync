@@ -1,9 +1,9 @@
 from datetime import datetime
-import json
 from typing import Any
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel
 from sqlalchemy import ARRAY, JSON, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -32,14 +32,8 @@ class WorkshopItem(SQLModel, table=True):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     synced_at: datetime = Field(default_factory=datetime.utcnow)
-    meta_data: dict[str, Any] | None = Field(default=None, sa_column=Column("metadata", JSON))
-
-    @field_serializer("meta_data")
-    def serialize_meta_data(self, value: dict[str, Any] | None, _info) -> str | None:
-        """Serialize dict to JSON string for database storage."""
-        if value is None:
-            return None
-        return json.dumps(value, ensure_ascii=False)
+    # 使用 JSONB（PostgreSQL 原生 JSON 类型，可查询、索引）
+    meta_data: dict[str, Any] | None = Field(default=None, sa_column=Column("metadata", JSONB))
 
     def __repr__(self) -> str:
         return f"WorkshopItem(id={self.id}, title={self.title}, author={self.author}, created_at={self.created_at}, updated_at={self.updated_at}, rating={self.rating})"
