@@ -5,16 +5,26 @@ FROM python:3.14-slim
 WORKDIR /app
 
 # 安装系统依赖
+# lib32gcc-s1 仅在 amd64 上可用（Steam CMD 需要），arm64 跳过
 RUN apt-get update && apt-get install -y \
     curl \
     postgresql-client \
-    lib32gcc-s1 \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && (dpkg --print-architecture | grep -q amd64 \
+        && apt-get update \
+        && apt-get install -y lib32gcc-s1 lib32stdc++6 \
+        && rm -rf /var/lib/apt/lists/* \
+        || true)
 
-# 安装 Steam CMD
+# 安装 Steam CMD（仅 amd64 有官方二进制；arm64 跳过）
 RUN mkdir -p /steamcmd && \
-    curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf - -C /steamcmd && \
-    chmod +x /steamcmd/steamcmd.sh
+    if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+        curl -sqL "https://media.steampowered.com/client/installer/steamcmd_linux.tar.gz" | tar zxvf - -C /steamcmd && \
+        chmod +x /steamcmd/steamcmd.sh; \
+    else \
+        echo "Steam CMD 仅支持 amd64，当前架构跳过安装（不影响元数据抓取，但无法下载 mod 文件）"; \
+    fi
 
 # 创建下载目录
 RUN mkdir -p /app/downloads
@@ -33,7 +43,7 @@ ENV UV_SYSTEM_PYTHON=1 \
 COPY pyproject.toml uv.lock ./
 
 # 安装依赖
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 # 复制应用代码
 COPY . .
@@ -49,6 +59,5 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f "python main.py" || exit 1
 
-# 运行数据库迁移并启动应用
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run python main.py"]
-
+# 初始化数据库表（create_all 幂等，表已存在时跳过）并启动应用
+CMD ["sh", "-c", "uv run python -c \"from database import init_db; init_db()\" && uv run python main.py"]
