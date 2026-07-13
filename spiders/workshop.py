@@ -167,10 +167,15 @@ class Wrokshop:
         meta_data["num_ratings"] = votes_up + votes_down
 
         # 订阅/收藏/浏览统计
+        # Steam Web API field names (canonical for API-based sync)
         meta_data["subscriptions"] = detail.get("subscriptions", 0)
         meta_data["favorited"] = detail.get("favorited", 0)
         meta_data["followers"] = detail.get("followers", 0)
         meta_data["views"] = detail.get("views", 0)
+        # Aliases matching historical scrape keys so older SQL readers still work
+        meta_data["Current Subscribers"] = meta_data["subscriptions"]
+        meta_data["Current Favorites"] = meta_data["favorited"]
+        meta_data["Unique Visitors"] = meta_data["views"]
         meta_data["num_comments"] = detail.get("num_comments_public", 0)
         meta_data["num_children"] = detail.get("num_children", 0)
         meta_data["num_reports"] = detail.get("num_reports", 0)
