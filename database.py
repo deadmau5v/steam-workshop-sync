@@ -1,10 +1,11 @@
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import os
-from uuid import UUID
 
 from dotenv import load_dotenv
 from models.workshop import WorkshopItem
+from services.mod_sync import SteamSource
 from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine, select
 from utils.log import get_logger
@@ -45,81 +46,32 @@ def save_workshop_item(item: WorkshopItem, exist_ok: bool = False) -> WorkshopIt
     db = get_db()
 
     try:
-        statement = select(WorkshopItem).where(WorkshopItem.id == item.id)
+        statement = select(WorkshopItem).where(WorkshopItem.id == item.id).with_for_update()
         existing = db.exec(statement).first()
 
         if existing:
             if not exist_ok:
                 return existing
 
-            is_updated = False
-            if item.updated_at and existing.updated_at:
-                if item.updated_at > existing.updated_at:
-                    is_updated = True
-            elif item.updated_at and not existing.updated_at:
-                is_updated = True
-
-            update_data = item.model_dump(exclude={"id", "synced_at"})
+            # A Steam build change wakes the queue in the same transaction as
+            # the scraped timestamp, but never replaces translated asset fields.
+            is_updated = item.updated_at is not None and (
+                existing.updated_at is None or item.updated_at > existing.updated_at
+            )
+            update_data = item.model_dump(exclude={'id', 'synced_at'})
+            if existing.updated_at is not None and not is_updated:
+                update_data.pop('updated_at', None)
             for key, value in update_data.items():
-                # JSONB 列直接赋值 dict，SQLAlchemy 会正确处理
                 setattr(existing, key, value)
-            existing.synced_at = datetime.utcnow()
-
+            existing.synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            if is_updated:
+                db.execute(text("""
+                    UPDATE public.steam_sync_status
+                    SET status = 'pending', error_message = NULL, updated_at = CURRENT_TIMESTAMP
+                    WHERE workshop_item_id = :item_id
+                """), {'item_id': item.id})
             db.commit()
             db.refresh(existing)
-            logger.info(f"更新 WorkshopItem: {item.id} - {item.title}")
-
-            # 如果检测到 Steam 上有新版本更新，同步更新 asset 元数据，并重置同步状态为 pending
-            if is_updated:
-                try:
-                    res = db.execute(
-                        text(
-                            """
-                            SELECT a.id FROM asset.assets a
-                            JOIN public.steam_sync_status s ON s.asset_id = a.id
-                            WHERE s.workshop_item_id = :item_id
-                            LIMIT 1
-                            """
-                        ),
-                        {"item_id": item.id},
-                    ).first()
-                    if res:
-                        asset_id = str(res[0])
-                        title_json = json.dumps({"zh": item.title, "en": item.title}, ensure_ascii=False)
-                        desc_json = json.dumps({"zh": item.description, "en": item.description}, ensure_ascii=False) if item.description else None
-                        db.execute(
-                            text(
-                                """
-                                UPDATE asset.assets
-                                SET title = CAST(:title AS jsonb),
-                                    description = COALESCE(CAST(:desc AS jsonb), description),
-                                    updated_at = :updated_at
-                                WHERE id = :asset_id
-                                """
-                            ),
-                            {
-                                "title": title_json,
-                                "desc": desc_json,
-                                "updated_at": item.updated_at or datetime.utcnow(),
-                                "asset_id": asset_id,
-                            },
-                        )
-                        db.execute(
-                            text(
-                                """
-                                UPDATE public.steam_sync_status
-                                SET status = 'pending', updated_at = CURRENT_TIMESTAMP
-                                WHERE workshop_item_id = :item_id
-                                """
-                            ),
-                            {"item_id": item.id},
-                        )
-                        db.commit()
-                        logger.info(f"✨ 检测到 Steam 模组更新，已同步资产时间并重置待同步队列: {item.id} -> asset {asset_id}")
-                except Exception as ex:
-                    db.rollback()
-                    logger.warning(f"同步更新资产元数据失败: {ex}")
-
             return existing
         else:
             # 创建新记录
@@ -215,350 +167,251 @@ def get_sync_status(item_id: str) -> dict | None:
         db.close()
 
 
-def upsert_sync_status(item_id: str, status: str = "pending", error_message: str | None = None) -> None:
-    """创建或更新同步状态（upsert）"""
-    db = get_db()
-    try:
-        db.execute(
-            text(
-                """
-                INSERT INTO public.steam_sync_status (workshop_item_id, status, error_message)
-                VALUES (:item_id, :status, :error_msg)
-                ON CONFLICT (workshop_item_id)
-                DO UPDATE SET status = :status, error_message = :error_msg, updated_at = CURRENT_TIMESTAMP
-                """
-            ),
-            {"item_id": item_id, "status": status, "error_msg": error_message},
-        )
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.error(f"upsert_sync_status 失败: {e}")
-        raise
-    finally:
-        db.close()
+# Versioned attempt marker in the existing text field, avoiding a schema change.
+# Legacy failed/syncing rows did not have a marker and are never bulk requeued.
+MAX_ATTEMPTS = 3
+ATTEMPT_PATTERN = r'^source-v1 attempt=([1-3]);'
+DUE = """(s.status = 'pending' OR (
+    substring(s.error_message from :attempt_pattern) IS NOT NULL
+    AND CAST(substring(s.error_message from :attempt_pattern) AS integer) < :max_attempts
+    AND ((s.status = 'failed' AND s.updated_at <= CURRENT_TIMESTAMP - interval '15 minutes')
+         OR (s.status = 'syncing' AND s.updated_at <= CURRENT_TIMESTAMP - interval '90 minutes'))
+))"""
 
 
-def update_sync_status_completed(item_id: str, asset_id: str) -> None:
-    """标记同步完成"""
-    db = get_db()
-    try:
-        db.execute(
-            text(
-                """
-                UPDATE public.steam_sync_status
-                SET status = 'completed', asset_id = :asset_id, synced_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE workshop_item_id = :item_id
-                """
-            ),
-            {"item_id": item_id, "asset_id": asset_id},
-        )
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.error(f"update_sync_status_completed 失败: {e}")
-        raise
-    finally:
-        db.close()
+@dataclass(frozen=True)
+class SourceClaim:
+    attempt: int
+    claimed_at: datetime
+    asset_id: str | None
+
+
+def seed_source_queue(limit: int = 100) -> None:
+    with get_db() as db, db.begin():
+        db.execute(text("""
+            INSERT INTO public.steam_sync_status (workshop_item_id, status)
+            SELECT w.id, 'pending' FROM public.workshop_items w
+            LEFT JOIN public.steam_sync_status s ON s.workshop_item_id = w.id
+            WHERE s.workshop_item_id IS NULL
+            ORDER BY w.updated_at DESC NULLS LAST, w.id LIMIT :limit
+            ON CONFLICT (workshop_item_id) DO NOTHING
+        """), {'limit': limit})
+
+
+def expire_final_source_claims() -> int:
+    with get_db() as db, db.begin():
+        return db.execute(text("""
+            UPDATE public.steam_sync_status SET status='failed', updated_at=CURRENT_TIMESTAMP,
+                error_message=:failed WHERE status='syncing' AND error_message=:in_progress
+                AND updated_at <= CURRENT_TIMESTAMP - interval '90 minutes'
+        """), {'failed': f'source-v1 attempt={MAX_ATTEMPTS}; worker lease expired',
+               'in_progress': f'source-v1 attempt={MAX_ATTEMPTS}; in progress'}).rowcount
 
 
 def get_pending_sync_items(limit: int = 10) -> list[WorkshopItem]:
-    """获取待同步的 Workshop items（status = pending），按更新时间优先"""
-    db = get_db()
-    try:
-        result = db.execute(
-            text(
-                """
-                SELECT w.* FROM public.workshop_items w
-                JOIN public.steam_sync_status s ON s.workshop_item_id = w.id
-                WHERE s.status = 'pending'
-                ORDER BY w.updated_at DESC NULLS LAST, s.created_at
-                LIMIT :limit
-                """
-            ),
-            {"limit": limit},
-        )
-        rows = result.all()
-        items = []
-        for row in rows:
-            # 将数据库行转换为 WorkshopItem
-            item = WorkshopItem(
-                id=row[0],
-                url=row[1],
-                title=row[2],
-                coverview_url=row[3],
-                author=row[4],
-                author_profile=row[5],
-                rating=row[6],
-                description=row[7],
-                file_size=row[11],
-                images=row[12] if row[12] else [],
-                created_at=row[8],
-                updated_at=row[9],
-                synced_at=row[10],
-                meta_data=row[13] if len(row) > 13 else None,
-            )
-            items.append(item)
-        return items
-    finally:
-        db.close()
+    with get_db() as db:
+        query = select(WorkshopItem).from_statement(text(f"""
+            SELECT w.* FROM public.workshop_items w
+            JOIN public.steam_sync_status s ON s.workshop_item_id=w.id
+            WHERE {DUE} ORDER BY s.updated_at, w.id LIMIT :limit
+        """))
+        return list(db.execute(query, {'attempt_pattern': ATTEMPT_PATTERN,
+                                      'max_attempts': MAX_ATTEMPTS, 'limit': limit}).scalars())
 
 
-def get_items_without_sync_status(limit: int = 50) -> list[WorkshopItem]:
-    """获取还没有同步状态记录的 workshop items（新抓取的）"""
-    db = get_db()
-    try:
-        result = db.execute(
-            text(
-                """
-                SELECT w.* FROM public.workshop_items w
-                LEFT JOIN public.steam_sync_status s ON s.workshop_item_id = w.id
-                WHERE s.workshop_item_id IS NULL
-                ORDER BY w.updated_at DESC NULLS LAST, w.synced_at DESC
-                LIMIT :limit
-                """
-            ),
-            {"limit": limit},
-        )
-        rows = result.all()
-        items = []
-        for row in rows:
-            item = WorkshopItem(
-                id=row[0],
-                url=row[1],
-                title=row[2],
-                coverview_url=row[3],
-                author=row[4],
-                author_profile=row[5],
-                rating=row[6],
-                description=row[7],
-                file_size=row[11],
-                images=row[12] if row[12] else [],
-                created_at=row[8],
-                updated_at=row[9],
-                synced_at=row[10],
-                meta_data=row[13] if len(row) > 13 else None,
-            )
-            items.append(item)
-        return items
-    finally:
-        db.close()
+def _lock_item(db: Session, item: WorkshopItem) -> None:
+    row = db.execute(text('SELECT updated_at FROM public.workshop_items WHERE id=:id FOR UPDATE'),
+                     {'id': item.id}).one_or_none()
+    if row is None or row.updated_at != item.updated_at:
+        raise RuntimeError('Workshop build changed during source sync')
 
 
-# ============================================================
-# Asset / File 记录创建（直接操作数据库，不依赖主项目 ORM）
-# ============================================================
+def _matching_asset(db: Session, item_id: str, *, lock: bool = False):
+    return db.execute(text("""
+        SELECT id, creator_id, metadata, file_id FROM asset.assets
+        WHERE metadata->>'steam_workshop_id' = :item AND deleted_at IS NULL
+    """ + (' FOR UPDATE' if lock else '')), {'item': item_id}).one_or_none()
 
 
-def create_file_record(
-    object_key: str,
-    name: str,
-    mime_type: str,
-    size: int | None = None,
-    status: str = "completed",
-    user_id: str = STEAM_USER_ID,
-) -> str | None:
-    """在 public.files 表创建文件记录
-
-    Returns:
-        str: file UUID，失败返回 None
-    """
-    db = get_db()
-    try:
-        result = db.execute(
-            text(
-                """
-                INSERT INTO public.files (user_id, object_key, name, mime_type, size, status)
-                VALUES (:user_id, :object_key, :name, :mime_type, :size, :status)
-                RETURNING id
-                """
-            ),
-            {
-                "user_id": user_id,
-                "object_key": object_key,
-                "name": name,
-                "mime_type": mime_type,
-                "size": size,
-                "status": status,
-            },
-        )
-        file_id = str(result.scalar_one())
-        db.commit()
-        logger.info(f"创建 file 记录: {file_id} -> {object_key}")
-        return file_id
-    except Exception as e:
-        db.rollback()
-        logger.error(f"创建 file 记录失败: {e}")
-        return None
-    finally:
-        db.close()
+def claim_source(item: WorkshopItem, *, expected_asset_id: str | None = None) -> SourceClaim | None:
+    with get_db() as db, db.begin():
+        _lock_item(db, item)
+        recovery = expected_asset_id is not None
+        if recovery:
+            asset = _matching_asset(db, item.id)
+            if asset is None or str(asset.id) != expected_asset_id or str(asset.creator_id) != STEAM_USER_ID:
+                raise RuntimeError('Workshop item does not match the expected Steam asset')
+            db.execute(text("""
+                INSERT INTO public.steam_sync_status (workshop_item_id, status)
+                VALUES (:item, 'pending') ON CONFLICT (workshop_item_id) DO NOTHING
+            """), {'item': item.id})
+        current = db.execute(text(f"""
+            SELECT s.asset_id, s.status, ({DUE}) AS due,
+                   substring(s.error_message from :attempt_pattern) AS attempt,
+                   s.updated_at > CURRENT_TIMESTAMP - interval '90 minutes' AS fresh
+            FROM public.steam_sync_status s WHERE s.workshop_item_id=:item FOR UPDATE
+        """), {'item': item.id, 'attempt_pattern': ATTEMPT_PATTERN, 'max_attempts': MAX_ATTEMPTS}).one_or_none()
+        if not current or (not recovery and not current.due):
+            return None
+        if recovery and current.status == 'syncing' and current.attempt and current.fresh:
+            return None
+        if recovery and current.asset_id and str(current.asset_id) != expected_asset_id:
+            raise RuntimeError('sync status belongs to a different asset')
+        attempt = 1 if recovery or current.status == 'pending' else int(current.attempt) + 1
+        claimed_at = db.execute(text("""
+            UPDATE public.steam_sync_status SET status='syncing', updated_at=clock_timestamp(),
+                error_message=:marker WHERE workshop_item_id=:item RETURNING updated_at
+        """), {'item': item.id, 'marker': f'source-v1 attempt={attempt}; in progress'}).scalar_one()
+        asset_id = expected_asset_id or (str(current.asset_id) if current.asset_id else None)
+        return SourceClaim(attempt, claimed_at, asset_id)
 
 
-def create_asset_record(
-    workshop_item: WorkshopItem,
-    file_id: str,
-    cover_file_id: str | None = None,
-    screenshot_file_ids: list[str] | None = None,
-) -> str | None:
-    """在 asset.assets 表创建资产记录
+def fail_source(item: WorkshopItem, claim: SourceClaim, reason: str) -> None:
+    with get_db() as db, db.begin():
+        db.execute(text("""
+            UPDATE public.steam_sync_status SET status='failed', updated_at=CURRENT_TIMESTAMP,
+                error_message=:marker WHERE workshop_item_id=:item
+                    AND status='syncing' AND updated_at=:claim
+        """), {'item': item.id, 'claim': claim.claimed_at,
+               'marker': f'source-v1 attempt={claim.attempt}; {reason}'})
 
-    Returns:
-        str: asset UUID，失败返回 None
-    """
-    db = get_db()
-    try:
-        # 构建 title 和 description 的 JSONB（用 json.dumps 让 psycopg2 正确处理）
-        title_json = json.dumps({"zh": workshop_item.title, "en": workshop_item.title}, ensure_ascii=False)
-        description_json = (
-            json.dumps({"zh": workshop_item.description, "en": workshop_item.description}, ensure_ascii=False)
-            if workshop_item.description
-            else None
-        )
 
-        # metadata
-        metadata = json.dumps(
-            {
-                "steam_workshop_id": workshop_item.id,
-                "steam_url": workshop_item.url,
-                "steam_author": workshop_item.author,
-                "steam_rating": workshop_item.rating,
-            },
-            ensure_ascii=False,
-        )
+def _insert_file(db: Session, key: str, name: str, mime: str, size: int | None = None) -> str:
+    return str(db.execute(text("""
+        INSERT INTO public.files (user_id, object_key, name, mime_type, size, status)
+        VALUES (:owner, :key, :name, :mime, :size, 'completed') RETURNING id
+    """), {'owner': STEAM_USER_ID, 'key': key, 'name': name, 'mime': mime, 'size': size}).scalar_one())
 
-        # screenshot_file_ids 需要转为 UUID 数组格式
-        ss_ids = [str(UUID(x)) for x in screenshot_file_ids] if screenshot_file_ids else None
 
-        result = db.execute(
-            text(
-                """
-                INSERT INTO asset.assets (
-                    title, description, creator_id, version, file_id, cover_file_id,
-                    screenshot_file_ids, visibility, status, published_at, created_at, updated_at, metadata
-                )
-                VALUES (
-                    CAST(:title AS jsonb), CAST(:description AS jsonb), :creator_id, '1.0.0', :file_id, :cover_file_id,
-                    CAST(:screenshot_ids AS uuid[]), 'public', 'published', :published_at, :created_at, :updated_at, CAST(:metadata AS jsonb)
-                )
-                RETURNING id
-                """
-            ),
-            {
-                "title": title_json,
-                "description": description_json,
-                "creator_id": STEAM_USER_ID,
-                "file_id": file_id,
-                "cover_file_id": cover_file_id,
-                "screenshot_ids": ss_ids,
-                "published_at": workshop_item.synced_at or datetime.utcnow(),
-                "created_at": workshop_item.created_at or workshop_item.synced_at or datetime.utcnow(),
-                "updated_at": workshop_item.updated_at or workshop_item.synced_at or datetime.utcnow(),
-                "metadata": metadata,
-            },
-        )
-        asset_id = str(result.scalar_one())
-
-        # 创建 asset_stats 记录
-        db.execute(
-            text("INSERT INTO asset.asset_stats (asset_id) VALUES (:asset_id) ON CONFLICT DO NOTHING"),
-            {"asset_id": asset_id},
-        )
-
-        db.commit()
-        logger.info(f"创建 asset 记录: {asset_id} -> {workshop_item.title}")
+def commit_source(item: WorkshopItem, source: SteamSource, claim: SourceClaim,
+                  *, images: dict | None = None) -> str:
+    """Atomically publish only an uploaded, read-back-verified Steam source."""
+    if item.updated_at is None:
+        raise RuntimeError('missing Workshop build timestamp')
+    updated_at = item.updated_at if item.updated_at.tzinfo else item.updated_at.replace(tzinfo=timezone.utc)
+    if int(updated_at.timestamp()) != source.steam_time_updated:
+        raise RuntimeError('source belongs to a different Workshop build')
+    with get_db() as db, db.begin():
+        _lock_item(db, item)
+        status = db.execute(text("""
+            SELECT asset_id FROM public.steam_sync_status WHERE workshop_item_id=:item
+            AND status='syncing' AND updated_at=:claim FOR UPDATE
+        """), {'item': item.id, 'claim': claim.claimed_at}).one_or_none()
+        if status is None:
+            raise RuntimeError('source claim expired or superseded')
+        existing = _matching_asset(db, item.id, lock=True)
+        expected = claim.asset_id or (str(status.asset_id) if status.asset_id else None)
+        if expected and (existing is None or str(existing.id) != expected):
+            raise RuntimeError('source asset no longer matches the claim')
+        if existing and str(existing.creator_id) != STEAM_USER_ID:
+            raise RuntimeError('source asset is not owned by the Steam system account')
+        previous = ((existing.metadata or {}).get('steam_source') or {}) if existing else {}
+        if isinstance(previous.get('steam_time_updated'), int) and previous['steam_time_updated'] > source.steam_time_updated:
+            raise RuntimeError('refusing to replace a newer source')
+        file_id = db.execute(text("""
+            SELECT id FROM public.files WHERE object_key=:key AND size=:size
+                AND user_id=:owner AND status='completed' ORDER BY id LIMIT 1
+        """), {'key': source.object_key, 'size': source.size, 'owner': STEAM_USER_ID}).scalar_one_or_none()
+        if file_id is None:
+            file_id = _insert_file(db, source.object_key, f'{item.id}.rwmod', 'application/rwmod', source.size)
+        metadata = {'steam_source': {
+            'file_id': str(file_id), 'sha256': source.sha256, 'object_key': source.object_key,
+            'steam_time_updated': source.steam_time_updated,
+        }}
+        if existing:
+            asset_id = str(existing.id)
+            db.execute(text("""
+                UPDATE asset.assets SET metadata=COALESCE(metadata, '{}'::jsonb) || CAST(:metadata AS jsonb)
+                WHERE id=:id
+            """), {'metadata': json.dumps(metadata), 'id': asset_id})
+        else:
+            asset_id = _insert_source_asset(db, item, str(file_id), metadata, images or {})
+        db.execute(text("""
+            UPDATE public.steam_sync_status SET status='completed', asset_id=:asset, error_message=NULL,
+                synced_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE workshop_item_id=:item
+        """), {'asset': asset_id, 'item': item.id})
         return asset_id
-    except Exception as e:
-        db.rollback()
-        logger.error(f"创建 asset 记录失败: {e}")
-        return None
-    finally:
-        db.close()
+
+
+def _insert_source_asset(db: Session, item: WorkshopItem, file_id: str, metadata: dict, images: dict) -> str:
+    from mimetypes import guess_type
+    from pathlib import PurePosixPath
+
+    def image_file(key: str) -> str:
+        return _insert_file(db, key, PurePosixPath(key).name, guess_type(key)[0] or 'application/octet-stream')
+
+    cover = image_file(images['cover_key']) if images.get('cover_key') else None
+    screenshots = [image_file(key) for key in images.get('screenshot_keys', [])]
+    metadata.update(steam_workshop_id=item.id, steam_url=item.url, steam_author=item.author, steam_rating=item.rating)
+    asset_id = str(db.execute(text("""
+        INSERT INTO asset.assets (title, description, creator_id, version, file_id, cover_file_id,
+            screenshot_file_ids, visibility, status, published_at, created_at, updated_at, metadata)
+        VALUES (CAST(:title AS jsonb), CAST(:description AS jsonb), :owner, '1.0.0', :file, :cover,
+            CAST(:screenshots AS uuid[]), 'public', 'published', :published, :created, :updated,
+            CAST(:metadata AS jsonb)) RETURNING id
+    """), {
+        'title': json.dumps({'zh': item.title, 'en': item.title}),
+        'description': json.dumps({'zh': item.description, 'en': item.description}) if item.description else None,
+        'owner': STEAM_USER_ID, 'file': file_id, 'cover': cover, 'screenshots': screenshots or None,
+        'published': item.synced_at, 'created': item.created_at or item.synced_at,
+        'updated': item.updated_at or item.synced_at, 'metadata': json.dumps(metadata),
+    }).scalar_one())
+    db.execute(text('INSERT INTO asset.asset_stats (asset_id) VALUES (:id) ON CONFLICT DO NOTHING'), {'id': asset_id})
+    return asset_id
 
 
 def get_existing_asset_id(item_id: str) -> str | None:
-    """检查 workshop item 是否已有 asset 记录（通过 metadata.steam_workshop_id 查询）"""
-    db = get_db()
-    try:
-        result = db.execute(
-            text(
-                """
-                SELECT a.id FROM asset.assets a
-                WHERE a.metadata->>'steam_workshop_id' = :item_id
-                AND a.deleted_at IS NULL
-                LIMIT 1
-                """
-            ),
-            {"item_id": item_id},
-        )
-        row = result.first()
-        return str(row[0]) if row else None
-    finally:
-        db.close()
+    with get_db() as db:
+        asset = _matching_asset(db, item_id)
+        return str(asset.id) if asset else None
 
 
-def update_asset_record(
-    workshop_item: WorkshopItem,
-    asset_id: str,
-    file_id: str | None = None,
-    cover_file_id: str | None = None,
-    screenshot_file_ids: list[str] | None = None,
-) -> bool:
-    """更新 asset.assets 表记录（元数据、文件、截图、更新时间等）"""
-    db = get_db()
-    try:
-        title_json = json.dumps({"zh": workshop_item.title, "en": workshop_item.title}, ensure_ascii=False)
-        description_json = (
-            json.dumps({"zh": workshop_item.description, "en": workshop_item.description}, ensure_ascii=False)
-            if workshop_item.description
-            else None
-        )
-        metadata = json.dumps(
-            {
-                "steam_workshop_id": workshop_item.id,
-                "steam_url": workshop_item.url,
-                "steam_author": workshop_item.author,
-                "steam_rating": workshop_item.rating,
-            },
-            ensure_ascii=False,
-        )
-        ss_ids = [str(UUID(x)) for x in screenshot_file_ids] if screenshot_file_ids else None
+def get_recovery_asset(item_id: str, asset_id: str) -> str | None:
+    with get_db() as db:
+        asset = _matching_asset(db, item_id)
+        if asset is None or str(asset.id) != asset_id or str(asset.creator_id) != STEAM_USER_ID:
+            raise RuntimeError('Workshop item does not match the expected Steam asset')
+        return str(asset.file_id) if asset.file_id else None
 
-        set_clauses = [
-            "title = CAST(:title AS jsonb)",
-            "updated_at = :updated_at",
-            "metadata = CAST(:metadata AS jsonb)",
-        ]
-        params: dict = {
-            "asset_id": asset_id,
-            "title": title_json,
-            "updated_at": workshop_item.updated_at or workshop_item.synced_at or datetime.utcnow(),
-            "metadata": metadata,
-        }
 
-        if description_json is not None:
-            set_clauses.append("description = CAST(:description AS jsonb)")
-            params["description"] = description_json
+def read_committed_source(item_id: str, asset_id: str, source: SteamSource) -> dict:
+    with get_db() as db:
+        row = db.execute(text("""
+            SELECT a.file_id AS default_file_id, a.metadata->'steam_source' AS source,
+                f.id AS source_file_id, s.status
+            FROM asset.assets a
+            JOIN public.steam_sync_status s ON s.asset_id=a.id AND s.workshop_item_id=:item
+            JOIN public.files f ON CAST(f.id AS text)=a.metadata #>> '{steam_source,file_id}'
+            WHERE a.id=:asset AND a.deleted_at IS NULL AND s.status='completed'
+              AND f.object_key=:key AND f.size=:size AND f.status='completed' AND f.user_id=:owner
+        """), {'item': item_id, 'asset': asset_id, 'key': source.object_key,
+               'size': source.size, 'owner': STEAM_USER_ID}).one_or_none()
+        if row is None or row.source != {
+            'file_id': str(row.source_file_id), 'sha256': source.sha256,
+            'object_key': source.object_key, 'steam_time_updated': source.steam_time_updated,
+        }:
+            raise RuntimeError('committed source read-back did not match')
+        return {'default_file_id': str(row.default_file_id) if row.default_file_id else None,
+                'source_file_id': str(row.source_file_id), 'status': row.status}
 
-        if file_id is not None:
-            set_clauses.append("file_id = :file_id")
-            params["file_id"] = file_id
 
-        if cover_file_id is not None:
-            set_clauses.append("cover_file_id = :cover_file_id")
-            params["cover_file_id"] = cover_file_id
-
-        if ss_ids is not None:
-            set_clauses.append("screenshot_file_ids = CAST(:screenshot_ids AS uuid[])")
-            params["screenshot_ids"] = ss_ids
-
-        sql = f"UPDATE asset.assets SET {', '.join(set_clauses)} WHERE id = :asset_id"
-        db.execute(text(sql), params)
-        db.commit()
-        logger.info(f"更新 asset 记录成功: {asset_id} -> {workshop_item.title}")
-        return True
-    except Exception as e:
-        db.rollback()
-        logger.error(f"更新 asset 记录失败: {e}")
-        return False
-    finally:
-        db.close()
+def list_legacy_candidates(limit: int, after: str = '') -> list[dict]:
+    """Return hypotheses for targeted review, never mutate or imply a ZIP was inspected."""
+    with get_db() as db:
+        db.execute(text('SET TRANSACTION READ ONLY'))
+        rows = db.execute(text("""
+            SELECT w.id AS item_id, CAST(a.id AS text) AS asset_id, s.status,
+                   legacy.size AS legacy_recorded_size,
+                   'steam/' || w.id || '/' || w.id || '.rwmod' AS legacy_key
+            FROM public.workshop_items w
+            JOIN asset.assets a ON a.metadata->>'steam_workshop_id'=w.id AND a.deleted_at IS NULL
+            LEFT JOIN public.steam_sync_status s ON s.workshop_item_id=w.id
+            LEFT JOIN LATERAL (
+                SELECT MIN(f.size) AS size, COUNT(*) AS n FROM public.files f
+                WHERE f.object_key='steam/' || w.id || '/' || w.id || '.rwmod'
+            ) legacy ON true
+            WHERE w.id > :after AND a.creator_id=:owner AND (a.metadata->'steam_source') IS NULL
+              AND (s.status IN ('failed', 'syncing') OR legacy.n > 0)
+            ORDER BY w.id, a.id LIMIT :limit
+        """), {'after': after, 'owner': STEAM_USER_ID, 'limit': limit}).mappings()
+        return [dict(row) for row in rows]
