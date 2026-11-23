@@ -4,10 +4,14 @@
 用于上传 mod 文件（.rwmod）和图片到 Cloudflare R2。
 """
 
+from contextlib import closing
+import hashlib
 import os
+from pathlib import Path
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -37,7 +41,8 @@ class R2Service:
                     aws_access_key_id=access_key_id,
                     aws_secret_access_key=secret_access_key,
                     region_name=region_name,
-                    config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+                    config=Config(signature_version="s3v4", s3={"addressing_style": "path"},
+                                  connect_timeout=10, read_timeout=60, retries={"total_max_attempts": 3}),
                 )
             except Exception as e:
                 logger.error(f"R2 客户端初始化失败: {e}")
@@ -70,6 +75,59 @@ class R2Service:
         except Exception as e:
             logger.error(f"上传失败 {object_key}: {e}")
             return False
+
+    def put_immutable_source(self, path: Path, key: str, sha256: str) -> bool:
+        """Create only, then verify remote bytes, including on a deduplicated retry."""
+        if self._client is None:
+            return False
+        try:
+            size = path.stat().st_size
+            with path.open('rb') as body:
+                try:
+                    self._client.put_object(
+                        Bucket=self.bucket_name, Key=key, Body=body, IfNoneMatch='*',
+                        ContentLength=size, ContentType='application/octet-stream',
+                        Metadata={'sha256': sha256},
+                    )
+                except ClientError as exc:
+                    if exc.response['ResponseMetadata']['HTTPStatusCode'] != 412:
+                        raise
+            return self.verify_source_object(key, size, sha256)
+        except Exception as exc:
+            logger.error(f'Immutable source {key}: {type(exc).__name__}')
+            return False
+
+    def verify_source_object(self, key: str, size: int, sha256: str) -> bool:
+        if self._client is None:
+            return False
+        response = self._client.get_object(Bucket=self.bucket_name, Key=key)
+        digest = hashlib.sha256()
+        read = 0
+        with closing(response['Body']) as body:
+            if response['ContentLength'] != size:
+                return False
+            while chunk := body.read(1024 * 1024):
+                read += len(chunk)
+                if read > size:
+                    return False
+                digest.update(chunk)
+        return read == size and digest.hexdigest() == sha256
+
+    def is_empty_legacy_zip(self, key: str) -> bool:
+        """Identify the exact 22-byte ZIP produced by the historic empty-folder bug."""
+        if self._client is None:
+            raise RuntimeError('asset object storage is not configured')
+        try:
+            head = self._client.head_object(Bucket=self.bucket_name, Key=key)
+        except ClientError as exc:
+            if exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode') == 404:
+                return False
+            raise
+        if head['ContentLength'] != 22:
+            return False
+        obj = self._client.get_object(Bucket=self.bucket_name, Key=key, IfMatch=head['ETag'])
+        with closing(obj['Body']) as body:
+            return obj['ContentLength'] == 22 and body.read(23) == b'PK\x05\x06' + bytes(18)
 
     def upload_bytes(self, data: bytes, object_key: str, content_type: str = "application/octet-stream") -> bool:
         """上传字节数据到 R2"""
