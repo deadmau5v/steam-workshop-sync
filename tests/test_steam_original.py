@@ -35,7 +35,7 @@ def test_empty_download_is_never_uploaded(service, tmp_path, monkeypatch):
     assert not service.sync_mod(SimpleNamespace(id='2749712324', updated_at=datetime.fromtimestamp(123, timezone.utc)))
 
 
-@pytest.mark.parametrize('outcome', ['ok', 'empty', 'partial', 'false_success', 'wrong_build'])
+@pytest.mark.parametrize('outcome', ['ok', 'colored_success', 'colored_error', 'empty', 'partial', 'false_success', 'wrong_build'])
 def test_steamcmd_requires_fresh_final_content(service, monkeypatch, outcome):
     def steamcmd(cmd, **_kwargs):
         from pathlib import Path
@@ -50,13 +50,17 @@ def test_steamcmd_requires_fresh_final_content(service, monkeypatch, outcome):
             f'"AppWorkshop" {{ "WorkshopItemsInstalled" {{ "2749712324" {{ "timeupdated" "{epoch}" }} }} }}'
         )
         output = f'Success. Downloaded item 2749712324 to "{path}" (18 bytes)\n'
+        if outcome in {'colored_success', 'colored_error'}:
+            output = '\x1b[0m' + output
+        if outcome == 'colored_error':
+            output += '\x1b[31mERROR!\x1b[0m another error from SteamCMD.\n'
         if outcome == 'false_success':
             output = 'ERROR! Download item 2749712324 failed (Failure).\n'
         return subprocess.CompletedProcess(cmd, 0, output, '')
 
     monkeypatch.setattr(subprocess, 'run', steamcmd)
     with service.download_mod_with_steamcmd('2749712324', steam_time_updated=123) as path:
-        assert bool(path) == (outcome == 'ok')
+        assert bool(path) == (outcome in {'ok', 'colored_success'})
         if path:
             assert (path / 'mod-info.txt').is_file()
 

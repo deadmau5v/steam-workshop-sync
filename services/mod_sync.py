@@ -117,7 +117,8 @@ class ModSyncService:
             cmd.extend(['+workshop_download_item', self.appid, item_id, 'validate', '+quit'])
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, errors='replace', timeout=900)
-                output = result.stdout + '\n' + result.stderr
+                # SteamCMD emits terminal color/reset codes even with stdout piped.
+                output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout + '\n' + result.stderr)
                 match = re.search(rf'^Success\. Downloaded item {item_id} to "([^"\n]+)"', output, re.M)
                 if result.returncode or not match or re.search(r'ERROR!|rate limit', output, re.I):
                     raise ValueError('SteamCMD did not report a successful download')
