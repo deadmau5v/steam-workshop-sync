@@ -6,7 +6,6 @@ from uuid import UUID
 from dotenv import load_dotenv
 from models.workshop import WorkshopItem
 from sqlalchemy import text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Session, SQLModel, create_engine, select
 from utils.log import get_logger
 
@@ -53,6 +52,13 @@ def save_workshop_item(item: WorkshopItem, exist_ok: bool = False) -> WorkshopIt
             if not exist_ok:
                 return existing
 
+            is_updated = False
+            if item.updated_at and existing.updated_at:
+                if item.updated_at > existing.updated_at:
+                    is_updated = True
+            elif item.updated_at and not existing.updated_at:
+                is_updated = True
+
             update_data = item.model_dump(exclude={"id", "synced_at"})
             for key, value in update_data.items():
                 # JSONB 列直接赋值 dict，SQLAlchemy 会正确处理
@@ -62,6 +68,58 @@ def save_workshop_item(item: WorkshopItem, exist_ok: bool = False) -> WorkshopIt
             db.commit()
             db.refresh(existing)
             logger.info(f"更新 WorkshopItem: {item.id} - {item.title}")
+
+            # 如果检测到 Steam 上有新版本更新，同步更新 asset 元数据，并重置同步状态为 pending
+            if is_updated:
+                try:
+                    res = db.execute(
+                        text(
+                            """
+                            SELECT a.id FROM asset.assets a
+                            JOIN public.steam_sync_status s ON s.asset_id = a.id
+                            WHERE s.workshop_item_id = :item_id
+                            LIMIT 1
+                            """
+                        ),
+                        {"item_id": item.id},
+                    ).first()
+                    if res:
+                        asset_id = str(res[0])
+                        title_json = json.dumps({"zh": item.title, "en": item.title}, ensure_ascii=False)
+                        desc_json = json.dumps({"zh": item.description, "en": item.description}, ensure_ascii=False) if item.description else None
+                        db.execute(
+                            text(
+                                """
+                                UPDATE asset.assets
+                                SET title = CAST(:title AS jsonb),
+                                    description = COALESCE(CAST(:desc AS jsonb), description),
+                                    updated_at = :updated_at
+                                WHERE id = :asset_id
+                                """
+                            ),
+                            {
+                                "title": title_json,
+                                "desc": desc_json,
+                                "updated_at": item.updated_at or datetime.utcnow(),
+                                "asset_id": asset_id,
+                            },
+                        )
+                        db.execute(
+                            text(
+                                """
+                                UPDATE public.steam_sync_status
+                                SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+                                WHERE workshop_item_id = :item_id
+                                """
+                            ),
+                            {"item_id": item.id},
+                        )
+                        db.commit()
+                        logger.info(f"✨ 检测到 Steam 模组更新，已同步资产时间并重置待同步队列: {item.id} -> asset {asset_id}")
+                except Exception as ex:
+                    db.rollback()
+                    logger.warning(f"同步更新资产元数据失败: {ex}")
+
             return existing
         else:
             # 创建新记录
@@ -205,10 +263,7 @@ def update_sync_status_completed(item_id: str, asset_id: str) -> None:
 
 
 def get_pending_sync_items(limit: int = 10) -> list[WorkshopItem]:
-    """获取待同步的 Workshop items（status = pending）
-
-    返回 workshop_items 表中对应的数据，且排除已完成/正在同步的。
-    """
+    """获取待同步的 Workshop items（status = pending），按更新时间优先"""
     db = get_db()
     try:
         result = db.execute(
@@ -217,7 +272,7 @@ def get_pending_sync_items(limit: int = 10) -> list[WorkshopItem]:
                 SELECT w.* FROM public.workshop_items w
                 JOIN public.steam_sync_status s ON s.workshop_item_id = w.id
                 WHERE s.status = 'pending'
-                ORDER BY s.created_at
+                ORDER BY w.updated_at DESC NULLS LAST, s.created_at
                 LIMIT :limit
                 """
             ),
@@ -250,10 +305,7 @@ def get_pending_sync_items(limit: int = 10) -> list[WorkshopItem]:
 
 
 def get_items_without_sync_status(limit: int = 50) -> list[WorkshopItem]:
-    """获取还没有同步状态记录的 workshop items（新抓取的）
-
-    这些 item 需要创建 pending 状态的 sync_status 记录。
-    """
+    """获取还没有同步状态记录的 workshop items（新抓取的）"""
     db = get_db()
     try:
         result = db.execute(
@@ -262,7 +314,7 @@ def get_items_without_sync_status(limit: int = 50) -> list[WorkshopItem]:
                 SELECT w.* FROM public.workshop_items w
                 LEFT JOIN public.steam_sync_status s ON s.workshop_item_id = w.id
                 WHERE s.workshop_item_id IS NULL
-                ORDER BY w.synced_at DESC
+                ORDER BY w.updated_at DESC NULLS LAST, w.synced_at DESC
                 LIMIT :limit
                 """
             ),
@@ -375,7 +427,7 @@ def create_asset_record(
         )
 
         # screenshot_file_ids 需要转为 UUID 数组格式
-        ss_ids = screenshot_file_ids if screenshot_file_ids else None
+        ss_ids = [str(UUID(x)) for x in screenshot_file_ids] if screenshot_file_ids else None
 
         result = db.execute(
             text(
@@ -386,7 +438,7 @@ def create_asset_record(
                 )
                 VALUES (
                     CAST(:title AS jsonb), CAST(:description AS jsonb), :creator_id, '1.0.0', :file_id, :cover_file_id,
-                    :screenshot_ids, 'public', 'published', :published_at, :created_at, :updated_at, CAST(:metadata AS jsonb)
+                    CAST(:screenshot_ids AS uuid[]), 'public', 'published', :published_at, :created_at, :updated_at, CAST(:metadata AS jsonb)
                 )
                 RETURNING id
                 """
@@ -440,5 +492,73 @@ def get_existing_asset_id(item_id: str) -> str | None:
         )
         row = result.first()
         return str(row[0]) if row else None
+    finally:
+        db.close()
+
+
+def update_asset_record(
+    workshop_item: WorkshopItem,
+    asset_id: str,
+    file_id: str | None = None,
+    cover_file_id: str | None = None,
+    screenshot_file_ids: list[str] | None = None,
+) -> bool:
+    """更新 asset.assets 表记录（元数据、文件、截图、更新时间等）"""
+    db = get_db()
+    try:
+        title_json = json.dumps({"zh": workshop_item.title, "en": workshop_item.title}, ensure_ascii=False)
+        description_json = (
+            json.dumps({"zh": workshop_item.description, "en": workshop_item.description}, ensure_ascii=False)
+            if workshop_item.description
+            else None
+        )
+        metadata = json.dumps(
+            {
+                "steam_workshop_id": workshop_item.id,
+                "steam_url": workshop_item.url,
+                "steam_author": workshop_item.author,
+                "steam_rating": workshop_item.rating,
+            },
+            ensure_ascii=False,
+        )
+        ss_ids = [str(UUID(x)) for x in screenshot_file_ids] if screenshot_file_ids else None
+
+        set_clauses = [
+            "title = CAST(:title AS jsonb)",
+            "updated_at = :updated_at",
+            "metadata = CAST(:metadata AS jsonb)",
+        ]
+        params: dict = {
+            "asset_id": asset_id,
+            "title": title_json,
+            "updated_at": workshop_item.updated_at or workshop_item.synced_at or datetime.utcnow(),
+            "metadata": metadata,
+        }
+
+        if description_json is not None:
+            set_clauses.append("description = CAST(:description AS jsonb)")
+            params["description"] = description_json
+
+        if file_id is not None:
+            set_clauses.append("file_id = :file_id")
+            params["file_id"] = file_id
+
+        if cover_file_id is not None:
+            set_clauses.append("cover_file_id = :cover_file_id")
+            params["cover_file_id"] = cover_file_id
+
+        if ss_ids is not None:
+            set_clauses.append("screenshot_file_ids = CAST(:screenshot_ids AS uuid[])")
+            params["screenshot_ids"] = ss_ids
+
+        sql = f"UPDATE asset.assets SET {', '.join(set_clauses)} WHERE id = :asset_id"
+        db.execute(text(sql), params)
+        db.commit()
+        logger.info(f"更新 asset 记录成功: {asset_id} -> {workshop_item.title}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"更新 asset 记录失败: {e}")
+        return False
     finally:
         db.close()

@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+from pathlib import Path
 import time
 
 from database import (
@@ -10,6 +11,7 @@ from database import (
     get_pending_sync_items,
     init_db,
     save_workshop_item,
+    update_asset_record,
     update_sync_status_completed,
     upsert_sync_status,
 )
@@ -26,6 +28,8 @@ logger = get_logger(__name__)
 # 配置参数
 PAGE_DELAY = float(os.getenv("STEAM_WORKSHOP_SYNC_PAGE_DELAY", 5.0))  # 页面间延迟（秒）
 CYCLE_DELAY = float(os.getenv("STEAM_WORKSHOP_SYNC_CYCLE_DELAY", 60.0))  # 循环间延迟（秒）
+# 快速增量抓取页数（0 表示每轮全量扫；建议 5，每 10 轮自动进行一次全量扫）
+INCREMENTAL_PAGES = int(os.getenv("STEAM_WORKSHOP_SYNC_INCREMENTAL_PAGES", "5"))
 
 # Mod 文件同步配置
 MOD_SYNC_ENABLED = os.getenv("STEAM_WORKSHOP_SYNC_MOD_ENABLED", "false").lower() == "true"
@@ -85,30 +89,38 @@ def process_page(workshop: Wrokshop, page: int) -> tuple[int, int]:
         raise
 
 
-def run_metadata_sync(workshop: Wrokshop) -> None:
-    """执行一轮元数据抓取同步"""
+def run_metadata_sync(workshop: Wrokshop, full_scan: bool = False) -> None:
+    """执行一轮元数据抓取同步
+
+    Args:
+        workshop: Workshop 爬虫实例
+        full_scan: 是否全量扫描所有页面。如果为 False 且 INCREMENTAL_PAGES > 0，则仅抓取前 INCREMENTAL_PAGES 页。
+    """
     cycle_start_time = datetime.now()
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"🔄 开始元数据抓取 - {cycle_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    scan_type = "全量" if full_scan or INCREMENTAL_PAGES <= 0 else f"增量 (前 {INCREMENTAL_PAGES} 页)"
+    logger.info(f"🔄 开始元数据抓取 [{scan_type}] - {cycle_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"{'=' * 60}")
 
     try:
         # 首先获取第一页以确定总页数
         total_pages, _ = process_page(workshop, 1)
 
-        if total_pages == 1:
+        target_pages = total_pages if (full_scan or INCREMENTAL_PAGES <= 0) else min(total_pages, INCREMENTAL_PAGES)
+
+        if target_pages == 1:
             logger.info("✅ 元数据抓取完成（共 1 页）")
         else:
             time.sleep(PAGE_DELAY)
 
-            for page in range(2, total_pages + 1):
+            for page in range(2, target_pages + 1):
                 logger.info(f"\n⏳ {PAGE_DELAY}秒延迟后继续...")
                 process_page(workshop, page)
 
-                if page < total_pages:
+                if page < target_pages:
                     time.sleep(PAGE_DELAY)
 
-            logger.info(f"\n✅ 元数据抓取完成（共 {total_pages} 页）")
+            logger.info(f"\n✅ 元数据抓取完成（已处理 {target_pages}/{total_pages} 页）")
 
         cycle_duration = (datetime.now() - cycle_start_time).total_seconds()
         logger.info(f"⏱️  元数据抓取耗时: {cycle_duration:.2f}秒")
@@ -122,10 +134,10 @@ def run_mod_sync(mod_sync: ModSyncService) -> None:
     """执行一轮 mod 文件同步
 
     1. 为新抓取的 items 创建 pending 状态记录
-    2. 获取 pending 的 items，逐个下载 mod → 打包 → 上传 R2 → 创建 asset 记录
+    2. 获取 pending 的 items，逐个下载 mod → 打包 → 上传 R2 → 创建/更新 asset 记录
     """
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"📦 开始 mod 文件同步")
+    logger.info("📦 开始 mod 文件同步")
     logger.info(f"{'=' * 60}")
 
     try:
@@ -135,9 +147,9 @@ def run_mod_sync(mod_sync: ModSyncService) -> None:
             logger.info(f"为 {len(new_items)} 个新 item 创建同步状态记录")
             for item in new_items:
                 upsert_sync_status(item.id, status="pending")
-                time.sleep(0.1)  # 避免 DB 压力
+                time.sleep(0.05)  # 避免 DB 压力
 
-        # 2. 获取 pending 的 items
+        # 2. 获取 pending 的 items（按更新时间优先）
         pending_items = get_pending_sync_items(limit=MOD_SYNC_BATCH_SIZE)
 
         if not pending_items:
@@ -150,30 +162,24 @@ def run_mod_sync(mod_sync: ModSyncService) -> None:
         for idx, item in enumerate(pending_items, 1):
             logger.info(f"\n--- [{idx}/{len(pending_items)}] mod 同步: {item.id} - {item.title} ---")
 
-            # 检查是否已有 asset（跳过已完成的）
             existing_asset_id = get_existing_asset_id(item.id)
-            if existing_asset_id:
-                logger.info(f"  mod {item.id} 已有 asset 记录 ({existing_asset_id})，跳过")
-                update_sync_status_completed(item.id, existing_asset_id)
-                continue
 
             # 标记为 syncing
             upsert_sync_status(item.id, status="syncing")
 
             # 执行文件同步（下载 → 打包 → 上传 R2 → 图片同步）
-            file_success = mod_sync.sync_mod(item)
+            images_result = mod_sync.sync_mod(item)
 
-            if not file_success:
+            if not images_result:
                 upsert_sync_status(item.id, status="failed", error_message="文件下载/打包/上传失败")
                 continue
 
-            # 创建数据库记录（file + asset）
-            # 获取上传后的 object_key
+            # 创建/获取文件记录
             rwmod_key = f"steam/{item.id}/{item.id}.rwmod"
             file_id = create_file_record(
                 object_key=rwmod_key,
                 name=f"{item.id}.rwmod",
-                mime_type="application/octet-stream",
+                mime_type="application/rwmod",
                 size=item.file_size,
             )
 
@@ -181,56 +187,62 @@ def run_mod_sync(mod_sync: ModSyncService) -> None:
                 upsert_sync_status(item.id, status="failed", error_message="创建 file 记录失败")
                 continue
 
-            # 创建封面图 file 记录
+            # 创建封面图 file 记录（仅当 R2 实际上传成功）
             cover_file_id = None
-            if item.coverview_url:
-                # 推断封面图扩展名
-                cover_url_clean = item.coverview_url.split("?")[0]
-                ext = ".jpg"
-                for ct, e in [(".png", "image/png"), (".gif", "image/gif"), (".webp", "image/webp")]:
-                    if ct in cover_url_clean:
-                        ext = e
-                        break
-                cover_key = f"steam/{item.id}/cover{ext}"
+            if images_result.get("cover_key"):
+                cover_key = images_result["cover_key"]
+                ext = Path(cover_key).suffix or ".jpg"
+                mime = "image/png" if ext == ".png" else "image/jpeg"
                 cover_file_id = create_file_record(
                     object_key=cover_key,
                     name=f"cover{ext}",
-                    mime_type=f"image/{ext[1:]}",
+                    mime_type=mime,
                 )
 
-            # 创建截图 file 记录
+            # 创建截图 file 记录（仅当 R2 实际上传成功）
             screenshot_file_ids = []
-            if item.images:
-                for i, img_url in enumerate(item.images[:10]):
-                    img_url_clean = img_url.split("?")[0]
-                    ext = ".jpg"
-                    for ct, e in [(".png", "image/png"), (".gif", "image/gif"), (".webp", "image/webp")]:
-                        if ct in img_url_clean:
-                            ext = e
-                            break
-                    ss_key = f"steam/{item.id}/screenshot_{i}{ext}"
-                    ss_file_id = create_file_record(
-                        object_key=ss_key,
-                        name=f"screenshot_{i}{ext}",
-                        mime_type=f"image/{ext[1:]}",
-                    )
-                    if ss_file_id:
-                        screenshot_file_ids.append(ss_file_id)
+            for ss_key in images_result.get("screenshot_keys", []):
+                ext = Path(ss_key).suffix or ".jpg"
+                mime = "image/png" if ext == ".png" else "image/jpeg"
+                ss_name = Path(ss_key).name
+                ss_file_id = create_file_record(
+                    object_key=ss_key,
+                    name=ss_name,
+                    mime_type=mime,
+                )
+                if ss_file_id:
+                    screenshot_file_ids.append(ss_file_id)
 
-            # 创建 asset 记录
-            asset_id = create_asset_record(
-                workshop_item=item,
-                file_id=file_id,
-                cover_file_id=cover_file_id,
-                screenshot_file_ids=screenshot_file_ids if screenshot_file_ids else None,
-            )
-
-            if asset_id:
-                update_sync_status_completed(item.id, asset_id)
-                success_count += 1
-                logger.info(f"  ✅ mod {item.id} 同步完成 -> asset {asset_id}")
+            if existing_asset_id:
+                # 已有 asset，执行更新操作
+                updated = update_asset_record(
+                    workshop_item=item,
+                    asset_id=existing_asset_id,
+                    file_id=file_id,
+                    cover_file_id=cover_file_id,
+                    screenshot_file_ids=screenshot_file_ids if screenshot_file_ids else None,
+                )
+                if updated:
+                    update_sync_status_completed(item.id, existing_asset_id)
+                    success_count += 1
+                    logger.info(f"  ✅ mod {item.id} 增量更新完成 -> asset {existing_asset_id}")
+                else:
+                    upsert_sync_status(item.id, status="failed", error_message="更新 asset 记录失败")
             else:
-                upsert_sync_status(item.id, status="failed", error_message="创建 asset 记录失败")
+                # 全新 asset，执行创建操作
+                asset_id = create_asset_record(
+                    workshop_item=item,
+                    file_id=file_id,
+                    cover_file_id=cover_file_id,
+                    screenshot_file_ids=screenshot_file_ids if screenshot_file_ids else None,
+                )
+
+                if asset_id:
+                    update_sync_status_completed(item.id, asset_id)
+                    success_count += 1
+                    logger.info(f"  ✅ mod {item.id} 同步完成 -> asset {asset_id}")
+                else:
+                    upsert_sync_status(item.id, status="failed", error_message="创建 asset 记录失败")
 
             # mod 之间延迟
             if idx < len(pending_items):
@@ -249,7 +261,16 @@ def main():
         logger.error("程序退出：无法连接数据库")
         return
 
-    workshop = Wrokshop()
+    workshop = None
+    if os.getenv("STEAM_WORKSHOP_SYNC_API_KEY", "").strip():
+        try:
+            workshop = Wrokshop()
+            logger.info("🔍 元数据同步已启用 (Steam Web API)")
+        except Exception as e:
+            logger.warning(f"⚠️ 元数据爬虫初始化失败: {e}")
+    else:
+        logger.info("🔍 元数据同步未启用（未配置 STEAM_WORKSHOP_SYNC_API_KEY，如需自动抓取新 mod 元数据请在 .env 中设置）")
+
     cycle_count = 0
 
     # Mod 同步服务（可选启用）
@@ -277,8 +298,11 @@ def main():
         logger.info(f"{'#' * 60}")
 
         try:
-            # 1. 元数据抓取
-            run_metadata_sync(workshop)
+            # 1. 元数据抓取（若已配置 API Key）
+            # 每 10 轮或启动第 1 轮执行一次全量扫描，其余轮次快速增量扫描前 N 页
+            if workshop:
+                full_scan = (cycle_count == 1 or cycle_count % 10 == 0)
+                run_metadata_sync(workshop, full_scan=full_scan)
 
             # 2. Mod 文件同步（如果启用）
             if mod_sync:

@@ -37,6 +37,8 @@ class Wrokshop:
         self.timeout = int(os.environ.get("STEAM_WORKSHOP_SYNC_TIMEOUT", 30))
         self.request_delay = float(os.environ.get("STEAM_WORKSHOP_SYNC_REQUEST_DELAY", 1.0))
         self.page_size = int(os.environ.get("STEAM_WORKSHOP_SYNC_PAGE_SIZE", self.DEFAULT_PAGE_SIZE))
+        # Steam API 查询类型: 1 = RankedByPublicationDate (最新发布优先), 0 = RankedByVote (热度优先)
+        self.query_type = os.environ.get("STEAM_WORKSHOP_SYNC_QUERY_TYPE", "1").strip()
 
         # Steam CMD 配置（保留用于下载功能，抓取不依赖）
         self.steamcmd_path = os.environ.get("STEAM_WORKSHOP_SYNC_STEAMCMD_PATH", "steamcmd")
@@ -278,7 +280,8 @@ class Wrokshop:
         params = {
             "key": self.api_key,
             "appid": self.appid,
-            "page_size": str(self.page_size),
+            "query_type": self.query_type,
+            "numperpage": str(self.page_size),
             "cursor": cursor,
             "return_vote_data": "true",
             "return_previews": "true",
